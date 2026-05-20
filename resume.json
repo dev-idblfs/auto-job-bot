@@ -1,0 +1,79 @@
+{
+  "personal": {
+    "name": "Your Name",
+    "email": "your.email@example.com",
+    "phone": "+1-555-000-0000",
+    "location": {
+      "city": "San Francisco",
+      "state": "CA",
+      "country": "USA",
+      "remote_ok": true,
+      "willing_to_relocate": false
+    }
+  },
+  "target": {
+    "job_titles": [
+      "Software Engineer",
+      "Backend Engineer",
+      "Full Stack Engineer",
+      "Python Developer"
+    ],
+    "job_types": ["full-time", "contract"],
+    "experience_level": "mid",
+    "min_salary": 90000,
+    "salary_currency": "USD",
+    "industries": ["technology", "fintech", "saas", "startup"]
+  },
+  "experience": {
+    "years_total": 4,
+    "current_title": "Software Engineer",
+    "current_company": "Tech Corp",
+    "history": [
+      {
+        "title": "Software Engineer",
+        "company": "Tech Corp",
+        "years": 2,
+        "description": "Built scalable REST APIs using Python/FastAPI, managed PostgreSQL databases, deployed microservices on AWS"
+      },
+      {
+        "title": "Junior Developer",
+        "company": "Startup Inc",
+        "years": 2,
+        "description": "Developed React frontend applications, integrated third-party APIs, worked with Node.js and MongoDB"
+      }
+    ]
+  },
+  "skills": {
+    "primary": ["Python", "FastAPI", "Django", "PostgreSQL", "REST APIs"],
+    "secondary": ["React", "JavaScript", "TypeScript", "Node.js", "MongoDB"],
+    "cloud": ["AWS", "Docker", "Kubernetes", "CI/CD"],
+    "tools": ["Git", "Linux", "Redis", "RabbitMQ"],
+    "soft": ["agile", "scrum", "team leadership", "code review"]
+  },
+  "projects": [
+    {
+      "name": "E-Commerce Platform",
+      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users",
+      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS"]
+    },
+    {
+      "name": "Real-time Analytics Dashboard",
+      "description": "Developed a real-time analytics dashboard using WebSockets, Python, and React with data visualization",
+      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker"]
+    },
+    {
+      "name": "Microservices Migration",
+      "description": "Led migration of monolithic app to microservices architecture using Docker and Kubernetes",
+      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL"]
+    }
+  ],
+  "education": {
+    "degree": "B.S. Computer Science",
+    "institution": "State University",
+    "graduation_year": 2020
+  },
+  "certifications": [
+    "AWS Certified Developer – Associate",
+    "Docker Certified Associate"
+  ]
+}
