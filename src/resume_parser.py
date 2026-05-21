@@ -5,10 +5,70 @@ used for job matching and scoring.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Common English words and generic tech terms to exclude from project domain keywords
+_PROJECT_STOP_WORDS: frozenset[str] = frozenset({
+    # Articles, prepositions, conjunctions
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "up", "as", "into", "out", "over", "its",
+    "was", "is", "are", "were", "be", "been", "being", "have", "has", "had",
+    "do", "does", "did", "will", "would", "could", "should", "may", "might",
+    # Common action verbs (not useful for job matching)
+    "using", "built", "developed", "created", "made", "led", "handled",
+    "managed", "worked", "designed", "implemented", "deployed", "migrated",
+    "built", "wrote", "wrote", "helped", "supported",
+    # Pronouns/determiners
+    "it", "this", "that", "these", "those", "our", "their", "we", "i", "my",
+    # Very generic tech terms (already covered by skills)
+    "api", "data", "user", "users", "app", "web", "code", "test", "full",
+    "stack", "daily", "new", "large", "high", "scale", "based", "driven",
+})
+
+
+def _extract_project_domain_words(projects: list[dict]) -> set[str]:
+    """
+    Extract meaningful domain-specific keywords from project descriptions.
+
+    Returns single words and hyphenated terms (e.g. 'e-commerce', 'real-time')
+    that describe the business domain or architectural patterns.
+    """
+    domain_words: set[str] = set()
+    for proj in projects:
+        name = proj.get("name", "").lower()
+        desc = proj.get("description", "").lower()
+        combined = f"{name} {desc}"
+
+        # Extract hyphenated compound terms first (e.g. 'e-commerce', 'real-time')
+        for match in re.findall(r"[a-z]+-[a-z]+(?:-[a-z]+)*", combined):
+            if len(match) >= 5:  # Skip very short hyphenated terms
+                domain_words.add(match)
+
+        # Extract individual words, filtering stop words and short words
+        for word in re.findall(r"[a-z][a-z0-9]*", combined):
+            if len(word) >= 4 and word not in _PROJECT_STOP_WORDS:
+                domain_words.add(word)
+
+    return domain_words
+
+
+def _normalize_job_type(raw: str) -> str:
+    """Normalise various job-type strings to a canonical form."""
+    t = raw.lower().replace("_", " ").replace("-", " ").strip()
+    if t in ("fulltime", "full time", "permanent", "regular", "perm"):
+        return "full-time"
+    if t in ("parttime", "part time"):
+        return "part-time"
+    if t in ("contractor", "contract to hire", "c2h", "freelance", "temporary"):
+        return "contract"
+    if t in ("intern", "internship"):
+        return "internship"
+    # Return normalised (with dashes instead of spaces) to keep it tidy
+    return t.replace(" ", "-")
 
 
 class ResumeProfile:
@@ -37,9 +97,12 @@ class ResumeProfile:
 
         # Target job preferences
         self.target_titles: list[str] = target.get("job_titles", [])
-        self.job_types: list[str] = target.get("job_types", ["full-time"])
+        # Normalise job types so matching is consistent
+        raw_job_types: list[str] = target.get("job_types", ["full-time"])
+        self.job_types: list[str] = [_normalize_job_type(jt) for jt in raw_job_types]
         self.experience_level: str = target.get("experience_level", "mid")
         self.min_salary: int = target.get("min_salary", 0)
+        self.salary_currency: str = target.get("salary_currency", "")
         self.target_industries: list[str] = target.get("industries", [])
 
         # Experience
@@ -54,17 +117,17 @@ class ResumeProfile:
         self.skills_lower: set[str] = {s.lower() for s in all_skills}
         self.primary_skills: list[str] = skills_data.get("primary", [])
 
-        # Project keywords
+        # Project keywords – technologies + domain words from descriptions
         project_techs: list[str] = []
-        project_words: list[str] = []
         for proj in projects:
             project_techs.extend(proj.get("technologies", []))
-            desc = proj.get("description", "")
-            project_words.extend(desc.lower().split())
         self.project_technologies: list[str] = list(set(project_techs))
         self.project_tech_lower: set[str] = {t.lower() for t in self.project_technologies}
 
-        # Combined keyword pool for matching
+        # Domain-specific keywords extracted from project names and descriptions
+        self.project_domain_keywords: set[str] = _extract_project_domain_words(projects)
+
+        # Combined keyword pool for matching (skills + project technologies)
         self.all_keywords: set[str] = self.skills_lower | self.project_tech_lower
 
         # Location strings for matching

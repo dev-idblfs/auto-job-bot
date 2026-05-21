@@ -39,7 +39,7 @@ search:
 
 filters:
   # Override resume.json location here (optional)
-  # Leave empty to use city/state from resume.json
+  # Leave empty to auto-use city/state/country from resume.json
   locations: []              # e.g. ["Bengaluru", "Mumbai", "Remote"]
   remote_only: false         # true = only show remote/WFH jobs
 
@@ -47,10 +47,21 @@ filters:
   # Leave empty to auto-build from resume.json → target.job_titles
   job_titles: []
 
+  # Filter by job type/employment terms (optional)
+  # Leave empty to auto-use job_types from resume.json → target.job_types
+  # Recognised values: full-time, part-time, contract, internship
+  # Example: ["full-time", "contract"] to only show those employment types
+  job_types: []
+
+  # Enable minimum salary filtering (uses profile.min_salary from resume.json)
+  # When true, jobs whose parsed salary is below min_salary are dropped.
+  # Jobs with no salary listed are always kept (salary data is often absent).
+  min_salary_filter: false
+
   # Every job MUST contain at least one of these keywords (optional)
   required_keywords: []      # e.g. ["Python"] to only show Python jobs
 
-  # Jobs containing ANY of these are excluded
+  # Jobs containing ANY of these are excluded unconditionally
   excluded_keywords:
     - "10+ years"
     - "12+ years"
@@ -99,8 +110,9 @@ filters:
 
 scoring:
   # Relevance scoring weights (must sum to 100)
-  title_match_weight: 30      # Does job title match desired titles?
-  skills_match_weight: 40     # How many resume skills appear in job description?
+  title_match_weight: 25      # Does job title match desired titles?
+  skills_match_weight: 30     # How many resume skills appear in job description?
+  projects_match_weight: 15   # Do project domain keywords appear in job description?
   location_match_weight: 15   # Does location match or is it remote?
   experience_match_weight: 15 # Does experience language match profile level?
 

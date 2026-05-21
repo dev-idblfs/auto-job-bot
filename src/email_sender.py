@@ -65,6 +65,33 @@ def _score_badge(score: int) -> str:
     )
 
 
+def _job_type_badge(job_type: str) -> str:
+    """Return an inline badge for employment type (full-time, contract, etc.)."""
+    if not job_type:
+        return ""
+    t = job_type.lower()
+    if "full" in t:
+        bg, label = "#e8f5e9", "#2e7d32"
+        text = "Full-Time"
+    elif "contract" in t or "freelance" in t:
+        bg, label = "#fff3e0", "#e65100"
+        text = "Contract"
+    elif "part" in t:
+        bg, label = "#e3f2fd", "#1565c0"
+        text = "Part-Time"
+    elif "intern" in t:
+        bg, label = "#f3e5f5", "#6a1b9a"
+        text = "Internship"
+    else:
+        bg, label = "#f5f5f5", "#555"
+        text = job_type.title()
+    return (
+        f'<span style="background:{bg};color:{label};font-size:11px;'
+        f'padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">'
+        f'{text}</span>'
+    )
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -72,6 +99,7 @@ def _job_card_html(job: JobPosting) -> str:
         if job.remote
         else ""
     )
+    type_badge = _job_type_badge(job.job_type) if not job.remote else ""
     salary_line = (
         f'<div style="color:#388e3c;font-size:13px;margin-top:4px;">💰 {job.salary}</div>'
         if job.salary
@@ -86,7 +114,7 @@ def _job_card_html(job: JobPosting) -> str:
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
     <div>
       <div style="font-size:17px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">
-        {job.title}{remote_badge}
+        {job.title}{remote_badge}{type_badge}
       </div>
       <div style="font-size:14px;color:#444;margin-bottom:2px;">
         🏢 <strong>{job.company}</strong>
@@ -169,6 +197,7 @@ def build_html_email(
     &nbsp;📍 {profile.location_display or "India"}
     &nbsp;·&nbsp; 💼 {profile.experience_level.title()} · {profile.years_experience} yrs
     &nbsp;·&nbsp; 🔑 {", ".join(profile.primary_skills[:5])}
+    &nbsp;·&nbsp; 📋 {" / ".join(jt.title() for jt in profile.job_types) or "Any"}
   </div>
 
   <!-- Job cards -->
@@ -212,6 +241,7 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
             f"\n{i}. {job.title}",
             f"   Company  : {job.company}",
             f"   Location : {job.location}{'  [REMOTE]' if job.remote else ''}",
+            f"   Job Type : {job.job_type or 'Not specified'}",
             f"   Salary   : {job.salary or 'Not specified'}",
             f"   Source   : {job.source}",
             f"   Score    : {job.relevance_score}%",

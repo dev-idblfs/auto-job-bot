@@ -1,11 +1,20 @@
 """
 Job filter & scorer: ranks job postings by relevance to the resume profile.
 
-Scoring breakdown (configurable weights in config.yaml):
-  - Title match  (30 pts): does the job title match desired titles?
-  - Skills match (40 pts): how many resume skills appear in the posting?
-  - Location     (15 pts): does location match or is it remote?
-  - Experience   (15 pts): does level language match profile's experience level?
+Scoring breakdown (configurable weights in config.yaml → scoring):
+  - Title match   (25 pts default): does the job title match desired titles?
+  - Skills match  (30 pts default): how many resume skills appear in the posting?
+  - Projects match(15 pts default): do project domain keywords appear in posting?
+  - Location      (15 pts default): does location match or is it remote?
+  - Experience    (15 pts default): does level language match profile's experience level?
+
+Hard filters (applied before scoring):
+  - excluded_keywords   – jobs mentioning these are dropped unconditionally
+  - required_keywords   – jobs missing all of these are dropped
+  - remote_only         – drops non-remote if set
+  - locations           – drops jobs not in the specified locations
+  - job_types           – drops jobs whose type doesn't match profile.job_types
+  - min_salary_filter   – drops jobs whose parsed salary is below profile.min_salary
 """
 
 from __future__ import annotations
@@ -18,9 +27,54 @@ from pathlib import Path
 from typing import Any
 
 from .job_searcher import JobPosting
-from .resume_parser import ResumeProfile
+from .resume_parser import ResumeProfile, _normalize_job_type
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Salary parsing helper
+# ---------------------------------------------------------------------------
+
+def _parse_salary_value(salary_str: str) -> float | None:
+    """
+    Try to extract a numeric salary value from a free-text salary string.
+
+    Handles formats like:
+      "₹8–12 LPA", "12 LPA", "$90,000", "90k–120k", "9,00,000"
+    Returns an annual INR/USD estimate as a float, or None if unparseable.
+    """
+    if not salary_str:
+        return None
+
+    s = salary_str.lower().replace(",", "")
+
+    # Indian LPA (Lakhs Per Annum)  –  e.g. "8 lpa", "8-12 lpa", "₹8 lpa"
+    lpa_match = re.search(r"([\d.]+)\s*(?:–|-|to)?\s*([\d.]+)?\s*lpa", s)
+    if lpa_match:
+        low = float(lpa_match.group(1))
+        high_str = lpa_match.group(2)
+        high = float(high_str) if high_str else low
+        mid = (low + high) / 2
+        return mid * 100_000  # convert LPA → absolute INR
+
+    # "k" suffix  –  e.g. "90k", "90k-120k"
+    k_match = re.search(r"([\d.]+)k\s*(?:–|-|to)\s*([\d.]+)k", s)
+    if k_match:
+        low = float(k_match.group(1)) * 1000
+        high = float(k_match.group(2)) * 1000
+        return (low + high) / 2
+    k_single = re.search(r"([\d.]+)k", s)
+    if k_single:
+        return float(k_single.group(1)) * 1000
+
+    # Plain number (may be annual)  –  e.g. "90000", "900000"
+    plain = re.search(r"([\d]+)", s)
+    if plain:
+        val = float(plain.group(1))
+        return val
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -33,14 +87,11 @@ def _score_title(job_title: str, profile: ResumeProfile, weight: int) -> int:
     best = 0
     for desired in profile.target_titles:
         d = desired.lower()
-        # Exact match
         if d == jt:
             best = max(best, weight)
-        # Desired title is a substring of the job title or vice-versa
         elif d in jt or jt in d:
             best = max(best, int(weight * 0.8))
         else:
-            # Word-level overlap
             d_words = set(d.split())
             j_words = set(jt.split())
             overlap = d_words & j_words
@@ -55,7 +106,6 @@ def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
     text_lower = text.lower()
     matched = 0
     for skill in profile.all_keywords:
-        # Use word-boundary matching for short skills to avoid false positives
         if len(skill) <= 3:
             if re.search(rf"\b{re.escape(skill)}\b", text_lower):
                 matched += 1
@@ -75,6 +125,23 @@ def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
     return int(weight * combined)
 
 
+def _score_projects(text: str, profile: ResumeProfile, weight: int) -> int:
+    """
+    Points for project domain-keyword matches in the job text.
+
+    Uses the domain keywords extracted from project names and descriptions
+    (e.g. 'e-commerce', 'analytics', 'microservices', 'real-time') rather than
+    the technology stack (which is already scored by _score_skills).
+    """
+    if not profile.project_domain_keywords:
+        return 0
+
+    text_lower = text.lower()
+    matched = sum(1 for kw in profile.project_domain_keywords if kw in text_lower)
+    ratio = min(matched / len(profile.project_domain_keywords), 1.0)
+    return int(weight * ratio)
+
+
 def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int:
     """Points for location match or remote compatibility."""
     loc_lower = job.location.lower()
@@ -91,7 +158,6 @@ def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int
     if profile.willing_to_relocate:
         return int(weight * 0.4)
 
-    # No match at all
     return 0
 
 
@@ -103,38 +169,38 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
     level = profile.experience_level
     level_keywords: list[str] = scoring_cfg.get(level, {}).get("keywords", [])
 
-    # If no level keywords defined, give full score (don't penalise)
     if not level_keywords:
-        return weight
+        return weight  # No level keywords defined → don't penalise
 
     for kw in level_keywords:
         if kw in text_lower:
             return weight
 
-    # Mild partial credit for adjacent levels
     adjacent = {"junior": "mid", "mid": "senior", "senior": "mid"}.get(level, "")
     adjacent_kws: list[str] = scoring_cfg.get(adjacent, {}).get("keywords", [])
     for kw in adjacent_kws:
         if kw in text_lower:
             return int(weight * 0.5)
 
-    # If no level language found at all → neutral (don't heavily penalise)
+    # No level language found at all → mild neutral score
     return int(weight * 0.6)
 
 
 def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
     """Compute and return a 0-100 relevance score for a job posting."""
     scoring = config.get("scoring", {})
-    title_w = scoring.get("title_match_weight", 30)
-    skills_w = scoring.get("skills_match_weight", 40)
-    loc_w = scoring.get("location_match_weight", 15)
-    exp_w = scoring.get("experience_match_weight", 15)
+    title_w    = scoring.get("title_match_weight",    25)
+    skills_w   = scoring.get("skills_match_weight",   30)
+    projects_w = scoring.get("projects_match_weight", 15)
+    loc_w      = scoring.get("location_match_weight", 15)
+    exp_w      = scoring.get("experience_match_weight", 15)
 
     full_text = f"{job.title} {job.company} {job.description} {' '.join(job.tags)}"
 
     score = (
         _score_title(job.title, profile, title_w)
         + _score_skills(full_text, profile, skills_w)
+        + _score_projects(full_text, profile, projects_w)
         + _score_location(job, profile, loc_w)
         + _score_experience(full_text, profile, exp_w, config)
     )
@@ -156,10 +222,13 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
             logger.debug("Excluded %r – matched excluded keyword %r", job.title, kw)
             return False
 
-    # Required keywords (all must be present)
-    for kw in filter_cfg.get("required_keywords", []):
-        if kw.lower() not in text_lower:
-            logger.debug("Excluded %r – missing required keyword %r", job.title, kw)
+    # Required keywords (at least one must be present when list is non-empty)
+    required_kws: list[str] = filter_cfg.get("required_keywords", [])
+    if required_kws:
+        if not any(kw.lower() in text_lower for kw in required_kws):
+            logger.debug(
+                "Excluded %r – none of required keywords %r found", job.title, required_kws
+            )
             return False
 
     # Remote-only filter
@@ -167,19 +236,50 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
         if not job.remote and "remote" not in job.location.lower():
             return False
 
-    # Location filter (if explicit locations specified)
+    # Location filter (if explicit locations specified in config; otherwise use resume)
     location_overrides: list[str] = filter_cfg.get("locations", [])
-    if location_overrides:
+    effective_locations: list[str] = location_overrides if location_overrides else profile.location_terms
+    if effective_locations:
         loc_lower = job.location.lower()
         remote_ok_here = (
             job.remote
             or "remote" in loc_lower
-            or any("remote" in lo.lower() for lo in location_overrides)
+            or any("remote" in lo.lower() for lo in effective_locations)
         )
         if not remote_ok_here:
-            matched_loc = any(lo.lower() in loc_lower for lo in location_overrides)
+            matched_loc = any(lo.lower() in loc_lower for lo in effective_locations)
             if not matched_loc:
+                logger.debug(
+                    "Excluded %r – location %r not in %r", job.title, job.location, effective_locations
+                )
                 return False
+
+    # Job type filter – compare normalised job types
+    job_type_overrides: list[str] = filter_cfg.get("job_types", [])
+    # Fall back to profile.job_types; skip filter if list is empty
+    desired_types: list[str] = job_type_overrides if job_type_overrides else profile.job_types
+    if desired_types and job.job_type:
+        normalised_job_type = _normalize_job_type(job.job_type)
+        normalised_desired = [_normalize_job_type(jt) for jt in desired_types]
+        if not any(
+            dt in normalised_job_type or normalised_job_type in dt
+            for dt in normalised_desired
+        ):
+            logger.debug(
+                "Excluded %r – job_type %r not in desired %r",
+                job.title, job.job_type, desired_types,
+            )
+            return False
+
+    # Salary filter (only if min_salary_filter is enabled and job has a salary)
+    if filter_cfg.get("min_salary_filter", False) and profile.min_salary > 0 and job.salary:
+        parsed = _parse_salary_value(job.salary)
+        if parsed is not None and parsed < profile.min_salary:
+            logger.debug(
+                "Excluded %r – salary %s parsed as %.0f < min %d",
+                job.title, job.salary, parsed, profile.min_salary,
+            )
+            return False
 
     return True
 
@@ -235,14 +335,12 @@ def save_seen_jobs(history_file: str, seen_ids: set[str], retention_days: int) -
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
         timestamps: dict[str, str] = existing.get("timestamps", {})
 
-        # Remove old entries
         retained = {
             jid: ts
             for jid, ts in timestamps.items()
             if _parse_ts(ts) >= cutoff
         }
 
-        # Add new
         now_str = datetime.now(tz=timezone.utc).isoformat()
         for jid in seen_ids:
             retained[jid] = retained.get(jid, now_str)
@@ -291,7 +389,6 @@ def filter_and_rank_jobs(
     filtered: list[JobPosting] = []
 
     for job in jobs:
-        # Skip previously seen jobs
         if dedup_enabled and job.id in seen_ids:
             continue
 
@@ -311,11 +408,9 @@ def filter_and_rank_jobs(
         filtered.append(job)
         new_seen_ids.add(job.id)
 
-    # Save updated seen IDs
     if dedup_enabled and new_seen_ids:
         save_seen_jobs(history_file, seen_ids | new_seen_ids, retention_days)
 
-    # Sort by relevance descending
     filtered.sort(key=lambda j: j.relevance_score, reverse=True)
 
     max_jobs = config.get("email", {}).get("max_jobs_per_email", 30)
