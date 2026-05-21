@@ -1,79 +1,141 @@
 {
   "personal": {
-    "name": "Your Name",
-    "email": "your.email@example.com",
-    "phone": "+1-555-000-0000",
+    "name": "Abhishek Bajpai",
+    "email": "abbajpaiknp@gmail.com",
+    "phone": "+91-8840751388",
     "location": {
-      "city": "San Francisco",
-      "state": "CA",
-      "country": "USA",
+      "city": "Kanpur",
+      "state": "Uttar Pradesh",
+      "country": "India",
       "remote_ok": true,
-      "willing_to_relocate": false
+      "willing_to_relocate": true
     }
   },
   "target": {
     "job_titles": [
-      "Software Engineer",
-      "Backend Engineer",
-      "Full Stack Engineer",
-      "Python Developer"
+      "Performance Marketing",
+      "Growth Marketing",
+      "Product Design",
+      "Product Designer",
+      "Associate Product Manager",
+      "Campaign Specialist",
+      "Brand Manager",
+      "Digital Marketing",
+      "Performance Marketing Executive",
+      "Social Media Specialist",
+      "Product Analyst"
     ],
     "job_types": ["full-time", "contract"],
     "experience_level": "mid",
-    "min_salary": 90000,
-    "salary_currency": "USD",
-    "industries": ["technology", "fintech", "saas", "startup"]
+    "min_salary": 0,
+    "salary_currency": "INR",
+    "industries": ["marketing", "saas", "edtech", "startup", "ecommerce", "healthcare", "agency"]
   },
   "experience": {
-    "years_total": 4,
-    "current_title": "Software Engineer",
-    "current_company": "Tech Corp",
+    "years_total": 3,
+    "current_title": "Freelance Product Designer & Performance Marketer",
+    "current_company": "Aetlier Clinic",
     "history": [
       {
-        "title": "Software Engineer",
-        "company": "Tech Corp",
-        "years": 2,
-        "description": "Built scalable REST APIs using Python/FastAPI, managed PostgreSQL databases, deployed microservices on AWS"
+        "title": "Freelance Product Designer & Performance Marketer",
+        "company": "Aetlier Clinic",
+        "years": 0.5,
+        "description": "Meta Ads campaigns, ROAS/CTR optimization, A/B testing, audience funnels, landing page and UI/UX optimization, ad creatives and social content calendar"
       },
       {
-        "title": "Junior Developer",
-        "company": "Startup Inc",
+        "title": "Meta Ads Expert | Social Media Specialist",
+        "company": "UV-Soft Solution",
+        "years": 0.3,
+        "description": "Meta advertising for Kanpur and Australia markets, campaign analysis, social media strategy"
+      },
+      {
+        "title": "Performance Marketing Executive",
+        "company": "Groupick Getzie Technology Pvt Ltd",
         "years": 2,
-        "description": "Developed React frontend applications, integrated third-party APIs, worked with Node.js and MongoDB"
+        "description": "Meta ads strategy, app install campaigns, influencer marketing, social content, landing page optimization, performance reporting"
+      },
+      {
+        "title": "Community Manager Intern",
+        "company": "Nblik",
+        "years": 0.2,
+        "description": "Brand community management, product operations, app install campaigns, user engagement"
       }
     ]
   },
   "skills": {
-    "primary": ["Python", "FastAPI", "Django", "PostgreSQL", "REST APIs"],
-    "secondary": ["React", "JavaScript", "TypeScript", "Node.js", "MongoDB"],
-    "cloud": ["AWS", "Docker", "Kubernetes", "CI/CD"],
-    "tools": ["Git", "Linux", "Redis", "RabbitMQ"],
-    "soft": ["agile", "scrum", "team leadership", "code review"]
+    "primary": [
+      "Performance Marketing",
+      "Growth Marketing",
+      "Meta Ads",
+      "Google Ads",
+      "A/B Testing",
+      "ROAS",
+      "CTR",
+      "CPA",
+      "Conversion Rate Optimization",
+      "Product Design",
+      "UI/UX",
+      "Wireframing",
+      "Brand Management",
+      "Campaign Management",
+      "Digital Marketing"
+    ],
+    "secondary": [
+      "Product Management",
+      "Salesforce",
+      "Influencer Marketing",
+      "Social Media Marketing",
+      "Google Analytics",
+      "Landing Page Optimization",
+      "User Journey",
+      "Agile",
+      "Scrum"
+    ],
+    "cloud": [],
+    "tools": [
+      "Figma",
+      "Canva",
+      "Google Analytics",
+      "Google Search Console",
+      "Google Tag Manager",
+      "Keyword Planner",
+      "Jira",
+      "ChatGPT"
+    ],
+    "soft": [
+      "cross-functional collaboration",
+      "data-driven decision making",
+      "brand positioning",
+      "consumer behavior"
+    ]
   },
   "projects": [
     {
-      "name": "E-Commerce Platform",
-      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users",
-      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS"]
+      "name": "Meta Ads Growth & ROAS Optimization",
+      "description": "Strategized and optimized Meta Ads with cold/warm/retargeting funnels, A/B testing on creatives and landing pages",
+      "technologies": ["Meta Ads", "A/B Testing", "ROAS", "CTR", "CPA", "Google Analytics"]
     },
     {
-      "name": "Real-time Analytics Dashboard",
-      "description": "Developed a real-time analytics dashboard using WebSockets, Python, and React with data visualization",
-      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker"]
+      "name": "Product Page & Conversion Funnel Optimization",
+      "description": "Wireframes, user flows, landing page design and copy to improve conversion rates and reduce drop-offs",
+      "technologies": ["Figma", "UI/UX", "Conversion Rate Optimization", "Wireframing"]
     },
     {
-      "name": "Microservices Migration",
-      "description": "Led migration of monolithic app to microservices architecture using Docker and Kubernetes",
-      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL"]
+      "name": "App Install & Engagement Campaigns",
+      "description": "App install and engagement campaigns with influencer marketing and performance reporting",
+      "technologies": ["Meta Ads", "Google Ads", "Influencer Marketing", "App Install"]
     }
   ],
   "education": {
-    "degree": "B.S. Computer Science",
-    "institution": "State University",
-    "graduation_year": 2020
+    "degree": "MBA (Honours) – Marketing Management & Operations",
+    "institution": "AKTU University, Lucknow",
+    "graduation_year": 2022
   },
   "certifications": [
-    "AWS Certified Developer – Associate",
-    "Docker Certified Associate"
+    "Fundamentals of Digital Marketing",
+    "Certified Salesforce Administrator",
+    "Product Management – Udemy",
+    "Basics of Product Management – Turnip",
+    "SaaS-Guru BootCamp – Salesforce & Agile"
   ]
 }

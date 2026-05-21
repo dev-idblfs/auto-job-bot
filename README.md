@@ -149,9 +149,12 @@ Each job gets a 0–100 relevance score:
 | Component | Weight | Logic |
 |---|---|---|
 | **Title match** | 30 pts | Exact/partial match vs. your target titles |
-| **Skills match** | 40 pts | % of your skills/tech stack found in the job |
+| **Skills match** | 30 pts | % of your skills/tech stack found in the job |
+| **Projects match** | 10 pts | Technologies from your projects in the job |
 | **Location match** | 15 pts | City match, remote flag, or relocation willingness |
 | **Experience level** | 15 pts | Junior/mid/senior keywords match your profile |
+
+Hard filters also use `target.job_types`, `target.min_salary`, and `experience.years_total` from `resume.json`.
 
 Weights are configurable in `config.yaml → scoring`.
 
