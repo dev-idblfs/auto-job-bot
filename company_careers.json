@@ -1,0 +1,185 @@
+{
+  "_comment": "Curated list of Indian tech company career pages. Add/remove as needed.",
+  "companies": [
+    {
+      "name": "Razorpay",
+      "careers_url": "https://razorpay.com/jobs/",
+      "job_list_selector": ".job-listing, .jobs-list-item, [class*='job']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "PhonePe",
+      "careers_url": "https://www.phonepe.com/careers/",
+      "job_list_selector": ".job-card, .opening-card, [class*='job']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Groww",
+      "careers_url": "https://groww.in/careers",
+      "job_list_selector": "a[href*='/careers/'], .job-item, .role-item",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "CRED",
+      "careers_url": "https://careers.cred.club/",
+      "job_list_selector": ".job-card, .opening, [class*='position']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Meesho",
+      "careers_url": "https://meesho.io/careers",
+      "job_list_selector": ".job-opening, .careers-item, [class*='job']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Swiggy",
+      "careers_url": "https://careers.swiggy.com/",
+      "job_list_selector": ".job-card, .job-tile, [class*='position']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Zomato",
+      "careers_url": "https://www.zomato.com/careers",
+      "job_list_selector": ".job-item, [class*='job'], a[href*='/careers/']",
+      "location": "Gurugram"
+    },
+    {
+      "name": "Flipkart",
+      "careers_url": "https://www.flipkartcareers.com/#!/joblist",
+      "job_list_selector": ".job-listing, .job-card",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Paytm",
+      "careers_url": "https://jobs.paytm.com/",
+      "job_list_selector": ".job-card, .opening-row, [class*='job']",
+      "location": "Noida"
+    },
+    {
+      "name": "Ola",
+      "careers_url": "https://ola.careers/",
+      "job_list_selector": ".job-item, [class*='opening'], [class*='position']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Urban Company",
+      "careers_url": "https://careers.urbancompany.com/",
+      "job_list_selector": ".job-card, [class*='job'], [class*='opening']",
+      "location": "Gurugram"
+    },
+    {
+      "name": "BrowserStack",
+      "careers_url": "https://www.browserstack.com/careers",
+      "job_list_selector": ".job-listing, .careers-listing, [class*='job']",
+      "location": "Mumbai"
+    },
+    {
+      "name": "Freshworks",
+      "careers_url": "https://www.freshworks.com/company/careers/",
+      "job_list_selector": ".job-item, [class*='careers-item'], [class*='position']",
+      "location": "Chennai"
+    },
+    {
+      "name": "Zoho",
+      "careers_url": "https://careers.zohocorp.com/jobs/Careers",
+      "job_list_selector": ".job-row, .opening-row, [class*='job']",
+      "location": "Chennai"
+    },
+    {
+      "name": "Infosys",
+      "careers_url": "https://career.infosys.com/joblist",
+      "job_list_selector": ".job-card, .position-card, [class*='job']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "TCS",
+      "careers_url": "https://www.tcs.com/careers/tcs-careers",
+      "job_list_selector": ".job-listing, [class*='opening']",
+      "location": "Mumbai"
+    },
+    {
+      "name": "Wipro",
+      "careers_url": "https://careers.wipro.com/careers-home/jobs",
+      "job_list_selector": ".job-card, [class*='job-listing']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "HCL Technologies",
+      "careers_url": "https://www.hcltech.com/careers",
+      "job_list_selector": "[class*='job-card'], [class*='opening']",
+      "location": "Noida"
+    },
+    {
+      "name": "Tech Mahindra",
+      "careers_url": "https://careers.techmahindra.com/en_IN/jobs",
+      "job_list_selector": ".job-listing, [class*='position']",
+      "location": "Pune"
+    },
+    {
+      "name": "Atlassian India",
+      "careers_url": "https://www.atlassian.com/company/careers/all-jobs?location=India",
+      "job_list_selector": "[class*='job'], [class*='opening'], li[data-testid]",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Walmart Global Tech India",
+      "careers_url": "https://careers.walmart.com/results?q=&location=India",
+      "job_list_selector": "[class*='job-card'], [data-automation*='job']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Juspay",
+      "careers_url": "https://juspay.in/careers",
+      "job_list_selector": "[class*='job'], [class*='opening'], [class*='role']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Setu",
+      "careers_url": "https://setu.co/careers",
+      "job_list_selector": "[class*='job'], [class*='opening']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Darwinbox",
+      "careers_url": "https://darwinbox.com/careers",
+      "job_list_selector": "[class*='job'], [class*='opening'], [class*='position']",
+      "location": "Hyderabad"
+    },
+    {
+      "name": "Yellow.ai",
+      "careers_url": "https://yellow.ai/careers/",
+      "job_list_selector": "[class*='job'], a[href*='/careers/']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Leadsquared",
+      "careers_url": "https://www.leadsquared.com/careers/",
+      "job_list_selector": "[class*='job'], [class*='opening']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "HasuraDB",
+      "careers_url": "https://hasura.io/careers/",
+      "job_list_selector": "[class*='job'], [class*='opening']",
+      "location": "Remote / Bengaluru"
+    },
+    {
+      "name": "InMobi",
+      "careers_url": "https://www.inmobi.com/company/careers/",
+      "job_list_selector": "[class*='job'], [class*='opening'], [class*='role']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "ShareChat / Moj",
+      "careers_url": "https://sharechat.com/careers",
+      "job_list_selector": "[class*='job'], [class*='opening']",
+      "location": "Bengaluru"
+    },
+    {
+      "name": "Postman",
+      "careers_url": "https://www.postman.com/company/careers/",
+      "job_list_selector": "[class*='job'], [class*='opening'], [class*='position']",
+      "location": "Bengaluru"
+    }
+  ]
+}

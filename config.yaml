@@ -1,0 +1,112 @@
+# ============================================================
+# auto-job-bot – India Job Alert System Configuration
+# ============================================================
+# Edit this file to customise your daily job search.
+
+email:
+  # Must match EMAIL_SENDER environment variable
+  sender: "your.email@gmail.com"
+  # Comma-separated in EMAIL_RECIPIENT env var, or list here
+  recipients:
+    - "your.email@gmail.com"
+  subject_prefix: "[Job Alert]"
+  # Max jobs to include in each daily digest email
+  max_jobs_per_email: 30
+
+search:
+  # Only include jobs posted in the last N days (1 = today only)
+  days_back: 1
+
+  # Minimum relevance score (0–100) to include a job
+  # Lower to get more results, raise to get tighter matches
+  min_relevance_score: 40
+
+  # Maximum raw results to fetch per source before filtering
+  max_results_per_source: 50
+
+  # ── Job Sources ─────────────────────────────────────────
+  # Set to false to disable a source
+  sources:
+    linkedin_jobs: true       # LinkedIn public guest API (no auth needed)
+    linkedin_posts: false     # LinkedIn posts with job links (needs LINKEDIN_EMAIL + LINKEDIN_PASSWORD)
+    naukri: true              # Naukri.com – India's largest job board
+    indeed: true              # Indeed India (in.indeed.com)
+    foundit: true             # Foundit.in (formerly Monster India)
+    hirist: true              # Hirist.tech – dedicated India tech jobs
+    cutshort: true            # Cutshort.io – startup & tech jobs India
+    internshala: false        # Internshala – enable for junior/fresher roles (0–3 yrs exp)
+    company_careers: true     # Scrape career pages of top Indian tech companies
+
+filters:
+  # Override resume.json location here (optional)
+  # Leave empty to use city/state from resume.json
+  locations: []              # e.g. ["Bengaluru", "Mumbai", "Remote"]
+  remote_only: false         # true = only show remote/WFH jobs
+
+  # Override desired job titles from resume.json (optional)
+  # Leave empty to auto-build from resume.json → target.job_titles
+  job_titles: []
+
+  # Every job MUST contain at least one of these keywords (optional)
+  required_keywords: []      # e.g. ["Python"] to only show Python jobs
+
+  # Jobs containing ANY of these are excluded
+  excluded_keywords:
+    - "10+ years"
+    - "12+ years"
+    - "15+ years"
+    - "20+ years"
+    - "Principal Engineer"
+    - "VP of Engineering"
+    - "Director of Engineering"
+    - "unpaid"
+    - "commission only"
+
+  # Experience level keyword mapping used for scoring
+  experience_levels:
+    junior:
+      keywords:
+        - "0-1 year"
+        - "0-2 years"
+        - "1-2 years"
+        - "fresher"
+        - "entry level"
+        - "entry-level"
+        - "new grad"
+        - "graduate"
+        - "junior"
+        - "associate"
+    mid:
+      keywords:
+        - "2-4 years"
+        - "2-5 years"
+        - "3-5 years"
+        - "3-6 years"
+        - "mid level"
+        - "mid-level"
+        - "intermediate"
+    senior:
+      keywords:
+        - "5+ years"
+        - "5-8 years"
+        - "6-9 years"
+        - "senior"
+        - "sr."
+        - "lead"
+        - "staff"
+        - "principal"
+        - "experienced"
+
+scoring:
+  # Relevance scoring weights (must sum to 100)
+  title_match_weight: 30      # Does job title match desired titles?
+  skills_match_weight: 40     # How many resume skills appear in job description?
+  location_match_weight: 15   # Does location match or is it remote?
+  experience_match_weight: 15 # Does experience language match profile level?
+
+deduplication:
+  # Skip jobs already seen in previous runs
+  enabled: true
+  history_file: "seen_jobs.json"
+  # Remove seen-job records older than this many days
+  retention_days: 30

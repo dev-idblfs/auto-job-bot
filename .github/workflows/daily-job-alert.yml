@@ -1,0 +1,89 @@
+name: Daily India Job Alert
+
+on:
+  schedule:
+    # 3:30 AM UTC = 9:00 AM IST every day
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (fetch & filter, no email)"
+        required: false
+        default: "false"
+        type: boolean
+      send_test:
+        description: "Send test email (ignores deduplication)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  job-alert:
+    name: Fetch & Send Job Digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restore deduplication history from cache so we don't re-send jobs
+      - name: Restore seen-jobs cache
+        uses: actions/cache@v4
+        with:
+          path: seen_jobs.json
+          key: seen-jobs-${{ github.ref_name }}
+          restore-keys: |
+            seen-jobs-
+
+      - name: Run job alert (normal)
+        if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.send_test != 'true' }}
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+          LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
+        run: python main.py --verbose
+
+      - name: Run job alert (dry run)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        env:
+          DRY_RUN_SAVE_HTML: "1"
+        run: python main.py --dry-run --verbose
+
+      - name: Run job alert (send test)
+        if: ${{ github.event.inputs.send_test == 'true' }}
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+          LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
+        run: python main.py --send-test --verbose
+
+      # Save updated dedup history
+      - name: Save seen-jobs cache
+        uses: actions/cache@v4
+        if: always()
+        with:
+          path: seen_jobs.json
+          key: seen-jobs-${{ github.ref_name }}-${{ github.run_id }}
+
+      # Upload HTML preview as artifact (dry-run only)
+      - name: Upload HTML preview
+        if: ${{ github.event.inputs.dry_run == 'true' && hashFiles('job_digest_preview.html') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-digest-preview
+          path: job_digest_preview.html
+          retention-days: 7
