@@ -40,6 +40,7 @@ class ResumeProfile:
         self.job_types: list[str] = target.get("job_types", ["full-time"])
         self.experience_level: str = target.get("experience_level", "mid")
         self.min_salary: int = target.get("min_salary", 0)
+        self.salary_currency: str = target.get("salary_currency", "INR")
         self.target_industries: list[str] = target.get("industries", [])
 
         # Experience
