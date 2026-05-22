@@ -10,6 +10,29 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Maps generic industry names → text signals found in job postings
+INDUSTRY_KEYWORD_MAP: dict[str, list[str]] = {
+    "technology": ["software", "tech", "saas", "platform", "api", "cloud"],
+    "fintech": ["fintech", "finance", "financial", "payment", "banking", "insurtech", "lending"],
+    "saas": ["saas", "software as a service", "cloud", "b2b", "enterprise software"],
+    "startup": ["startup", "early-stage", "seed stage", "series a", "venture-backed"],
+    "ecommerce": ["ecommerce", "e-commerce", "retail tech", "marketplace", "d2c"],
+    "healthcare": ["healthtech", "health tech", "medtech", "medical", "hospital", "clinical"],
+    "edtech": ["edtech", "ed-tech", "education tech", "learning platform", "lms"],
+    "logistics": ["logistics", "supply chain", "freight", "delivery tech", "warehouse"],
+    "gaming": ["gaming", "game development", "game studio", "mobile game"],
+    "media": ["media", "streaming", "content platform", "digital media"],
+}
+
+# Job type signals for detecting type in job descriptions
+JOB_TYPE_SIGNALS: dict[str, list[str]] = {
+    "full-time": ["full-time", "full time", "permanent", "regular", "direct hire", "salaried"],
+    "contract": ["contract", "freelance", "consultant", "c2c", "corp-to-corp", "fixed-term", "temporary"],
+    "part-time": ["part-time", "part time", "flexible hours", "20 hours"],
+    "internship": ["intern", "internship", "trainee", "apprentice"],
+    "remote": ["remote", "work from home", "wfh", "work-from-home", "fully remote", "distributed"],
+}
+
 
 class ResumeProfile:
     """Structured profile extracted from resume.json."""
@@ -38,9 +61,13 @@ class ResumeProfile:
         # Target job preferences
         self.target_titles: list[str] = target.get("job_titles", [])
         self.job_types: list[str] = target.get("job_types", ["full-time"])
+        self.job_types_lower: set[str] = {jt.lower() for jt in self.job_types}
         self.experience_level: str = target.get("experience_level", "mid")
         self.min_salary: int = target.get("min_salary", 0)
         self.target_industries: list[str] = target.get("industries", [])
+
+        # Industry keywords derived from target industries
+        self.industry_keywords: list[str] = self._build_industry_keywords()
 
         # Experience
         self.years_experience: int = experience.get("years_total", 0)
@@ -53,14 +80,13 @@ class ResumeProfile:
         self.all_skills: list[str] = all_skills
         self.skills_lower: set[str] = {s.lower() for s in all_skills}
         self.primary_skills: list[str] = skills_data.get("primary", [])
+        self.primary_skills_lower: set[str] = {s.lower() for s in self.primary_skills}
 
         # Project keywords
         project_techs: list[str] = []
-        project_words: list[str] = []
+        self.projects: list[dict] = projects
         for proj in projects:
             project_techs.extend(proj.get("technologies", []))
-            desc = proj.get("description", "")
-            project_words.extend(desc.lower().split())
         self.project_technologies: list[str] = list(set(project_techs))
         self.project_tech_lower: set[str] = {t.lower() for t in self.project_technologies}
 
@@ -73,6 +99,14 @@ class ResumeProfile:
             for t in [self.city, self.state, self.country]
             if t
         ]
+
+    def _build_industry_keywords(self) -> list[str]:
+        """Derive searchable keyword list from target industry names."""
+        keywords: list[str] = []
+        for industry in self.target_industries:
+            mapped = INDUSTRY_KEYWORD_MAP.get(industry.lower(), [industry.lower()])
+            keywords.extend(mapped)
+        return list(set(keywords))
 
     @property
     def location_display(self) -> str:

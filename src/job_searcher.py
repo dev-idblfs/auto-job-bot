@@ -41,6 +41,7 @@ class JobPosting:
     source: str
     tags: list[str] = field(default_factory=list)
     relevance_score: int = 0
+    matched_skills: list[str] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.id)

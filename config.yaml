@@ -1,7 +1,8 @@
 # ============================================================
-# auto-job-bot – India Job Alert System Configuration
+# auto-job-bot – Job Alert System Configuration
 # ============================================================
 # Edit this file to customise your daily job search.
+# Your profile (skills, experience, projects) is in resume.json.
 
 email:
   # Must match EMAIL_SENDER environment variable
@@ -15,6 +16,7 @@ email:
 
 search:
   # Only include jobs posted in the last N days (1 = today only)
+  # Set to 3 if you want a wider net for slower job markets
   days_back: 1
 
   # Minimum relevance score (0–100) to include a job
@@ -62,6 +64,11 @@ filters:
     - "unpaid"
     - "commission only"
 
+  # ── Dynamic experience year filter ──────────────────────
+  # Jobs requiring more than (resume.years_experience + this buffer) years
+  # will be excluded. E.g. profile has 4 yrs + buffer 4 = skip "8+ years" jobs.
+  experience_year_buffer: 4
+
   # Experience level keyword mapping used for scoring
   experience_levels:
     junior:
@@ -98,11 +105,23 @@ filters:
         - "experienced"
 
 scoring:
-  # Relevance scoring weights (must sum to 100)
-  title_match_weight: 30      # Does job title match desired titles?
+  # ── Core relevance scoring weights ──────────────────────
+  # These four components form the primary 0-100 score.
+  # Must be tuned together (the sum is the max before the 100 cap).
+  title_match_weight: 30      # Does job title match desired titles from resume?
   skills_match_weight: 40     # How many resume skills appear in job description?
   location_match_weight: 15   # Does location match or is it remote?
   experience_match_weight: 15 # Does experience language match profile level?
+
+  # ── Bonus points (on top of core score, final is capped at 100) ──
+  # Reward jobs that closely match the candidate's specific projects/tech
+  project_match_bonus: 10     # Bonus pts when project technologies appear in job
+
+  # Reward jobs in the candidate's target industries
+  industry_match_bonus: 5     # Bonus pts when job aligns with target industries
+
+  # Reward jobs matching the candidate's preferred job type (full-time, contract, etc.)
+  job_type_match_bonus: 5     # Bonus pts for job type / employment terms match
 
 deduplication:
   # Skip jobs already seen in previous runs
