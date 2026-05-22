@@ -295,19 +295,34 @@ def send_email(
     Returns True on success, False on failure.
     """
     email_cfg = config.get("email", {})
-    sender = os.getenv("EMAIL_SENDER", email_cfg.get("sender", "")).strip()
-    password = _normalize_smtp_password(os.getenv("EMAIL_PASSWORD", ""))
-    recipients_env = os.getenv("EMAIL_RECIPIENT", "")
+
+    raw_sender    = os.getenv("EMAIL_SENDER", "")
+    raw_password  = os.getenv("EMAIL_PASSWORD", "")
+    raw_recipient = os.getenv("EMAIL_RECIPIENT", "")
+
+    sender    = raw_sender.strip()
+    password  = _normalize_smtp_password(raw_password)
+    recipients_env = raw_recipient
+
+    # ── Verbose diagnostics (safe – no passwords printed) ──────────────────
+    logger.info("EMAIL_SENDER   env present: %s  value: %r",   bool(raw_sender),    sender or "(empty)")
+    logger.info("EMAIL_PASSWORD env present: %s  raw_len=%d  norm_len=%d",
+                bool(raw_password), len(raw_password), len(password))
+    logger.info("EMAIL_RECIPIENT env present: %s  value: %r", bool(raw_recipient), raw_recipient.strip() or "(empty)")
+
     recipients: list[str] = (
         [r.strip() for r in recipients_env.split(",") if r.strip()]
         if recipients_env
         else [r.strip() for r in email_cfg.get("recipients", []) if r.strip()]
     )
+    logger.info("Resolved sender=%r  recipients=%r", sender, recipients)
+    # ───────────────────────────────────────────────────────────────────────
 
     if not sender or not password:
         logger.error(
-            "Email not configured – set EMAIL_SENDER and EMAIL_PASSWORD "
-            "(GitHub: Settings → Secrets → Actions)"
+            "Email not configured – EMAIL_SENDER=%r EMAIL_PASSWORD len=%d. "
+            "Add secrets in GitHub: Settings → Secrets → Actions",
+            sender, len(password),
         )
         return False
 
@@ -319,13 +334,14 @@ def send_email(
 
     if not recipients:
         logger.error(
-            "No recipients configured – set EMAIL_RECIPIENT env var "
-            "(GitHub secret or config.yaml → email.recipients)"
+            "No recipients – EMAIL_RECIPIENT env=%r, config.yaml recipients=%r",
+            raw_recipient, email_cfg.get("recipients", []),
         )
         return False
 
     smtp_host = os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com").strip()
     smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+    logger.info("SMTP target: %s:%d", smtp_host, smtp_port)
 
     today = _format_date_short(datetime.now(tz=timezone.utc))
     subject_prefix = email_cfg.get("subject_prefix", "[Job Alert]")

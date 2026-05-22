@@ -61,23 +61,38 @@ jobs:
       - name: Verify email secrets (required for send)
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
+          echo "=== Secret diagnostics (values masked by GitHub) ==="
           missing=0
           for name in EMAIL_SENDER EMAIL_PASSWORD EMAIL_RECIPIENT; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing GitHub secret: $name (Settings → Secrets and variables → Actions)"
+            val="${!name}"
+            if [ -z "$val" ]; then
+              echo "::error::Secret $name is EMPTY or not set in Settings → Secrets → Actions"
               missing=1
+            else
+              echo "✅ $name is set (length: ${#val})"
             fi
           done
+
           if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required secrets are missing. Add them at:"
+            echo "::error::https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
+
           len="${#EMAIL_PASSWORD}"
           norm="${EMAIL_PASSWORD//[[:space:]-]/}"
-          echo "Email secrets present (sender=${EMAIL_SENDER}, recipient=${EMAIL_RECIPIENT})"
-          echo "EMAIL_PASSWORD length: ${len} (normalized: ${#norm}, Gmail expects 16)"
-          if [ "${#norm}" != "16" ]; then
-            echo "::warning::EMAIL_PASSWORD should be a 16-character Gmail App Password (no spaces/dashes)"
+          echo "EMAIL_PASSWORD raw_len=${len}  norm_len=${#norm}  (Gmail App Password must be 16 chars)"
+          if [ "${#norm}" -eq 0 ]; then
+            echo "::error::EMAIL_PASSWORD normalizes to empty – check the secret value"
+            exit 1
+          elif [ "${#norm}" != "16" ]; then
+            echo "::warning::EMAIL_PASSWORD is ${#norm} chars after stripping spaces/dashes (expected 16)"
+          else
+            echo "✅ EMAIL_PASSWORD length looks correct (16 chars)"
           fi
+
+          echo "Sender  : ${EMAIL_SENDER}"
+          echo "Recipients env: ${EMAIL_RECIPIENT}"
         env:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
