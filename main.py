@@ -102,7 +102,19 @@ def run_pipeline(config: dict, dry_run: bool = False, skip_dedup: bool = False) 
     else:
         success = send_email(ranked_jobs, profile, config)
         if not success:
-            logger.error("Email delivery failed")
+            logger.error(
+                "Email delivery failed after finding %d job(s). "
+                "Job matching worked — fix EMAIL_SENDER, EMAIL_PASSWORD, and "
+                "EMAIL_RECIPIENT (GitHub Actions secrets or .env locally).",
+                len(ranked_jobs),
+            )
+            print(
+                "\n❌ Email step failed. Jobs were found but the digest was not sent.\n"
+                "   • GitHub Actions: add secrets EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECIPIENT\n"
+                "   • Gmail: use an App Password → https://myaccount.google.com/apppasswords\n"
+                "   • Check the log above for SMTP authentication errors\n",
+                flush=True,
+            )
             return -1
 
     return len(ranked_jobs)
