@@ -1,30 +1,74 @@
 """
 Naukri.com scraper – uses Naukri's internal search API.
 
-The API endpoint is used by Naukri's own website; no auth token required
-but specific app headers are needed.
+Naukri returns HTTP 406 with "recaptcha required" unless a valid `nkparam`
+header is sent. The token is RSA-encrypted metadata (timestamp + page context).
 """
 
 from __future__ import annotations
 
+import base64
 import logging
-import re
+import time
+from typing import Any
+
+import requests
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from ..job_searcher import JobPosting
-from .base import BaseJobScraper, http_get, polite_sleep
+from .base import BaseJobScraper, polite_sleep
 
 logger = logging.getLogger(__name__)
 
 NAUKRI_API = "https://www.naukri.com/jobapi/v3/search"
-NAUKRI_HEADERS = {
-    "appid": "109",
-    "systemid": "109",
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Referer": "https://www.naukri.com/",
-    "Origin": "https://www.naukri.com",
-}
+NAUKRI_HOME = "https://www.naukri.com/"
+
+# Naukri's RSA public key (from their frontend bundle; used to build nkparam)
+NAUKRI_PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
+MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBALrlQ+djR0RjJwBF1xuisHmdFv334MIm
+K6LgzJhmLhN7B5yuEyaKoasgXQk3+OQglsOaBxEJ0j5PcTL3nbOvt80CAwEAAQ==
+-----END PUBLIC KEY-----"""
+
+_RSA_CIPHER = None
+
+
+def _generate_nkparam(page_type: str = "srp") -> str:
+    """Build a fresh nkparam token (required on every API call)."""
+    global _RSA_CIPHER
+    if _RSA_CIPHER is None:
+        key = serialization.load_pem_public_key(NAUKRI_PUBLIC_KEY_PEM)
+        _RSA_CIPHER = key
+
+    timestamp = int(time.time() * 1000)
+    plaintext = f"v0|{timestamp}|121_{page_type}"
+    encrypted = _RSA_CIPHER.encrypt(plaintext.encode("utf-8"), padding.PKCS1v15())
+    return base64.b64encode(encrypted).decode("utf-8")
+
+
+def _naukri_headers(seo_slug: str) -> dict[str, str]:
+    nk = _generate_nkparam()
+    return {
+        "appid": "109",
+        "systemid": "Naukri",
+        "nkparam": nk,
+        "Nkparam": nk,
+        "Accept": "application/json",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Referer": f"{NAUKRI_HOME}{seo_slug}",
+        "Origin": NAUKRI_HOME.rstrip("/"),
+    }
+
+
+def _seo_slug(query: str, location: str) -> str:
+    """Build SEO path used for Referer (e.g. brand-manager-jobs-in-mumbai)."""
+    q = query.lower().strip().replace(" ", "-")
+    loc = location.lower().strip().replace(" ", "-") if location else "india"
+    return f"{q}-jobs-in-{loc}" if loc else f"{q}-jobs"
 
 
 class NaukriScraper(BaseJobScraper):
@@ -32,18 +76,36 @@ class NaukriScraper(BaseJobScraper):
 
     name = "Naukri"
 
+    def __init__(self, queries: list[str], profile: Any, config: dict) -> None:
+        super().__init__(queries, profile, config)
+        self._api_session = requests.Session()
+        self._api_session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-IN,en;q=0.9",
+            }
+        )
+        try:
+            self._api_session.get(NAUKRI_HOME, timeout=15)
+        except Exception as exc:
+            logger.debug("Naukri homepage warm-up failed: %s", exc)
+
     def fetch(self) -> list[JobPosting]:
         seen: set[str] = set()
         jobs: list[JobPosting] = []
-
-        # Determine location filter from profile
         location = _build_location(self.profile)
+        api_blocked = False
 
         for query in self.queries:
-            if len(jobs) >= self.max_results:
+            if len(jobs) >= self.max_results or api_blocked:
                 break
 
+            seo_slug = _seo_slug(query, location)
             page_no = 1
+
             while len(jobs) < self.max_results:
                 params = {
                     "noOfResults": min(20, self.max_results - len(jobs)),
@@ -52,17 +114,24 @@ class NaukriScraper(BaseJobScraper):
                     "keyword": query,
                     "location": location,
                     "pageNo": page_no,
-                    "jobAge": 1,  # Posted in last 1 day
-                    "sort": "r",  # Sort by relevance
+                    "jobAge": 1,
+                    "sort": "r",
+                    "k": query,
+                    "seoKey": seo_slug,
+                    "src": "jobsearchDesk",
+                    "latLong": "",
                 }
 
                 try:
-                    data = http_get(
-                        NAUKRI_API,
-                        params=params,
-                        headers=NAUKRI_HEADERS,
-                        as_json=True,
+                    data = _naukri_search(self._api_session, params, seo_slug)
+                except NaukriApiBlocked as exc:
+                    logger.error(
+                        "Naukri API blocked for %r: %s – skipping remaining Naukri queries",
+                        query,
+                        exc,
                     )
+                    api_blocked = True
+                    break
                 except Exception as exc:
                     logger.error("Naukri API error for %r (page %d): %s", query, page_no, exc)
                     break
@@ -77,11 +146,12 @@ class NaukriScraper(BaseJobScraper):
                         continue
                     seen.add(job_id)
 
-                    # Extract salary info
                     salary = _extract_salary(item)
-
-                    # Skills / tags
-                    tags = [s.lower() for s in item.get("tagsAndSkills", "").split(",") if s.strip()]
+                    tags = [
+                        s.lower()
+                        for s in item.get("tagsAndSkills", "").split(",")
+                        if s.strip()
+                    ]
 
                     jobs.append(
                         JobPosting(
@@ -92,7 +162,9 @@ class NaukriScraper(BaseJobScraper):
                             remote=_is_remote(item),
                             job_type=_map_job_type(item),
                             description=item.get("jobDescription", ""),
-                            apply_url=item.get("jdURL", f"https://www.naukri.com/job-listings-{job_id}"),
+                            apply_url=item.get(
+                                "jdURL", f"https://www.naukri.com/job-listings-{job_id}"
+                            ),
                             posted_at=_parse_posted_date(item),
                             salary=salary,
                             source="Naukri",
@@ -104,7 +176,7 @@ class NaukriScraper(BaseJobScraper):
                         break
 
                 total = data.get("noOfJobs", 0)
-                if page_no * 20 >= min(total, 100):  # Cap at 100 results per query
+                if page_no * 20 >= min(total, 100):
                     break
                 page_no += 1
                 polite_sleep(1.5, 3.0)
@@ -112,6 +184,42 @@ class NaukriScraper(BaseJobScraper):
             polite_sleep(2.0, 4.0)
 
         return jobs
+
+
+class NaukriApiBlocked(Exception):
+    """Raised when Naukri requires captcha or rejects the request."""
+
+
+def _naukri_search(
+    session: requests.Session,
+    params: dict[str, Any],
+    seo_slug: str,
+) -> dict[str, Any]:
+    """GET jobapi/v3/search with a fresh nkparam; retry once on 406."""
+    last_error = ""
+    for attempt in range(2):
+        headers = _naukri_headers(seo_slug)
+        resp = session.get(NAUKRI_API, params=params, headers=headers, timeout=20)
+
+        if resp.status_code == 200:
+            return resp.json()
+
+        last_error = resp.text[:200]
+        try:
+            body = resp.json()
+            message = body.get("message", "")
+        except Exception:
+            message = resp.text[:120]
+
+        if resp.status_code == 406 and "recaptcha" in message.lower():
+            if attempt == 0:
+                polite_sleep(1.0, 2.0)
+                continue
+            raise NaukriApiBlocked(message)
+
+        resp.raise_for_status()
+
+    raise NaukriApiBlocked(last_error or "Naukri search failed")
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +230,7 @@ def _build_location(profile) -> str:
     """Build location string for Naukri search."""
     if hasattr(profile, "city") and profile.city:
         return profile.city
-    return ""
+    return "India"
 
 
 def _extract_salary(item: dict) -> str:
@@ -157,7 +265,12 @@ def _map_job_type(item: dict) -> str:
 def _parse_posted_date(item: dict) -> str:
     """Convert Naukri's footerPlaceholderLabel to ISO-ish date."""
     for ph in item.get("footerPlaceholderLabel", []):
-        label = ph.get("label", "")
+        if isinstance(ph, str):
+            label = ph
+        elif isinstance(ph, dict):
+            label = ph.get("label", "")
+        else:
+            continue
         if "ago" in label.lower() or "day" in label.lower():
             return label
     return ""
