@@ -57,9 +57,12 @@ def http_get(
 ) -> Any:
     """GET with retry/back-off. Returns JSON or response object."""
     s = session or get_session(headers)
+    # Per-request headers must be passed to .get(); session defaults alone are not enough
+    # when a shared session is reused across calls with different header sets.
+    req_headers = dict(headers) if headers else None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            resp = s.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            resp = s.get(url, params=params, headers=req_headers, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             return resp.json() if as_json else resp
         except requests.RequestException as exc:

@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 NAUKRI_API = "https://www.naukri.com/jobapi/v3/search"
 NAUKRI_HOME = "https://www.naukri.com/"
 
+# Required on every jobapi request (Naukri returns 400 if either is missing)
+NAUKRI_APP_ID = "109"
+NAUKRI_SYSTEM_ID = "109"
+NAUKRI_CLIENT_ID = "d3skt0p"
+
 # Naukri's RSA public key (from their frontend bundle; used to build nkparam)
 NAUKRI_PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBALrlQ+djR0RjJwBF1xuisHmdFv334MIm
@@ -47,13 +52,23 @@ def _generate_nkparam(page_type: str = "srp") -> str:
 
 
 def _naukri_headers(seo_slug: str) -> dict[str, str]:
+    """Build mandatory Naukri API headers (appid, systemid, nkparam)."""
     nk = _generate_nkparam()
+    if not nk:
+        raise NaukriApiError("Failed to generate nkparam token")
+
     return {
-        "appid": "109",
-        "systemid": "Naukri",
+        # Lowercase (what requests sends reliably)
+        "appid": NAUKRI_APP_ID,
+        "systemid": NAUKRI_SYSTEM_ID,
+        "clientid": NAUKRI_CLIENT_ID,
         "nkparam": nk,
         "Nkparam": nk,
+        # PascalCase mirrors (some gateways expect these)
+        "AppId": NAUKRI_APP_ID,
+        "SystemId": NAUKRI_SYSTEM_ID,
         "Accept": "application/json",
+        "Content-Type": "application/json",
         "Accept-Language": "en-IN,en;q=0.9",
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -61,7 +76,15 @@ def _naukri_headers(seo_slug: str) -> dict[str, str]:
         ),
         "Referer": f"{NAUKRI_HOME}{seo_slug}",
         "Origin": NAUKRI_HOME.rstrip("/"),
+        "authority": "www.naukri.com",
     }
+
+
+def _validate_naukri_headers(headers: dict[str, str]) -> None:
+    """Raise if required Naukri auth headers are missing or empty."""
+    for key in ("appid", "systemid", "nkparam"):
+        if not headers.get(key):
+            raise NaukriApiError(f"Missing required Naukri header: {key}")
 
 
 def _seo_slug(query: str, location: str) -> str:
@@ -124,6 +147,14 @@ class NaukriScraper(BaseJobScraper):
 
                 try:
                     data = _naukri_search(self._api_session, params, seo_slug)
+                except NaukriApiError as exc:
+                    logger.error(
+                        "Naukri API auth error for %r: %s – ensure cryptography is installed",
+                        query,
+                        exc,
+                    )
+                    api_blocked = True
+                    break
                 except NaukriApiBlocked as exc:
                     logger.error(
                         "Naukri API blocked for %r: %s – skipping remaining Naukri queries",
@@ -190,16 +221,30 @@ class NaukriApiBlocked(Exception):
     """Raised when Naukri requires captcha or rejects the request."""
 
 
+class NaukriApiError(Exception):
+    """Raised when Naukri rejects the request due to invalid/missing headers."""
+
+
 def _naukri_search(
     session: requests.Session,
     params: dict[str, Any],
     seo_slug: str,
 ) -> dict[str, Any]:
-    """GET jobapi/v3/search with a fresh nkparam; retry once on 406."""
+    """GET jobapi/v3/search with a fresh nkparam; retry once on 406/400."""
     last_error = ""
     for attempt in range(2):
         headers = _naukri_headers(seo_slug)
-        resp = session.get(NAUKRI_API, params=params, headers=headers, timeout=20)
+        _validate_naukri_headers(headers)
+
+        # Use requests.get with explicit headers (not session defaults) so appid/systemid
+        # are never dropped when the session is reused after the homepage warm-up.
+        resp = requests.get(
+            NAUKRI_API,
+            params=params,
+            headers=headers,
+            cookies=session.cookies,
+            timeout=20,
+        )
 
         if resp.status_code == 200:
             return resp.json()
@@ -210,6 +255,20 @@ def _naukri_search(
             message = body.get("message", "")
         except Exception:
             message = resp.text[:120]
+
+        if resp.status_code == 400 and "app id" in message.lower():
+            logger.warning(
+                "Naukri 400 (attempt %d): %s – headers sent: appid=%s systemid=%s nkparam=%s",
+                attempt + 1,
+                message,
+                headers.get("appid"),
+                headers.get("systemid"),
+                "yes" if headers.get("nkparam") else "no",
+            )
+            if attempt == 0:
+                polite_sleep(1.0, 2.0)
+                continue
+            raise NaukriApiError(message)
 
         if resp.status_code == 406 and "recaptcha" in message.lower():
             if attempt == 0:

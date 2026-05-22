@@ -34,16 +34,48 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          python -c "from cryptography.hazmat.primitives import serialization; from src.scrapers.naukri import _generate_nkparam; _generate_nkparam(); print('Naukri nkparam OK')"
 
-      # Restore deduplication history from cache so we don't re-send jobs
-      - name: Restore seen-jobs cache
+      # Deduplication history: one cache per branch (same key on restore + save)
+      - name: Cache seen-jobs history
+        id: seen-jobs-cache
         uses: actions/cache@v4
         with:
           path: seen_jobs.json
           key: seen-jobs-${{ github.ref_name }}
           restore-keys: |
+            seen-jobs-${{ github.ref_name }}
             seen-jobs-
+
+      - name: Initialize seen-jobs file
+        run: |
+          if [ ! -f seen_jobs.json ]; then
+            echo '{"ids":[],"timestamps":{}}' > seen_jobs.json
+            echo "No prior cache – started fresh dedup history"
+          else
+            echo "Restored seen-jobs cache (cache-hit=${{ steps.seen-jobs-cache.outputs.cache-hit }})"
+          fi
+
+      - name: Verify email secrets (required for send)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          missing=0
+          for name in EMAIL_SENDER EMAIL_PASSWORD EMAIL_RECIPIENT; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub secret: $name (Settings → Secrets and variables → Actions)"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            exit 1
+          fi
+          echo "Email secrets present (sender=${EMAIL_SENDER}, recipient=${EMAIL_RECIPIENT})"
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
 
       - name: Run job alert (normal)
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.send_test != 'true' }}
@@ -70,14 +102,6 @@ jobs:
           LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
           LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
         run: python main.py --send-test --verbose
-
-      # Save updated dedup history
-      - name: Save seen-jobs cache
-        uses: actions/cache@v4
-        if: always()
-        with:
-          path: seen_jobs.json
-          key: seen-jobs-${{ github.ref_name }}-${{ github.run_id }}
 
       # Upload HTML preview as artifact (dry-run only)
       - name: Upload HTML preview

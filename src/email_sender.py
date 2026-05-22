@@ -42,6 +42,20 @@ SOURCE_COLORS: dict[str, str] = {
 DEFAULT_COLOR = "#555555"
 
 
+def _format_date_long(dt: datetime) -> str:
+    """Cross-platform date (strftime %-d fails on some Linux runners)."""
+    return f"{dt.strftime('%A, %B')} {dt.day}, {dt.year}"
+
+
+def _format_date_short(dt: datetime) -> str:
+    return f"{dt.strftime('%b')} {dt.day}, {dt.year}"
+
+
+def _normalize_smtp_password(password: str) -> str:
+    """Gmail app passwords are often pasted as 'xxxx xxxx xxxx xxxx'."""
+    return password.strip().replace(" ", "")
+
+
 def _source_color(source: str) -> str:
     for key, color in SOURCE_COLORS.items():
         if key.lower() in source.lower():
@@ -120,7 +134,7 @@ def build_html_email(
     config: dict,
 ) -> str:
     """Compose the full HTML email body."""
-    today = datetime.now(tz=timezone.utc).strftime("%A, %B %-d, %Y")
+    today = _format_date_long(datetime.now(tz=timezone.utc))
     job_count = len(jobs)
 
     # Group by source for the summary header
@@ -233,29 +247,33 @@ def send_email(
     Returns True on success, False on failure.
     """
     email_cfg = config.get("email", {})
-    sender = os.getenv("EMAIL_SENDER", email_cfg.get("sender", ""))
-    password = os.getenv("EMAIL_PASSWORD", "")
+    sender = os.getenv("EMAIL_SENDER", email_cfg.get("sender", "")).strip()
+    password = _normalize_smtp_password(os.getenv("EMAIL_PASSWORD", ""))
     recipients_env = os.getenv("EMAIL_RECIPIENT", "")
     recipients: list[str] = (
         [r.strip() for r in recipients_env.split(",") if r.strip()]
         if recipients_env
-        else email_cfg.get("recipients", [])
+        else [r.strip() for r in email_cfg.get("recipients", []) if r.strip()]
     )
 
     if not sender or not password:
         logger.error(
-            "Email not configured – set EMAIL_SENDER and EMAIL_PASSWORD env vars"
+            "Email not configured – set EMAIL_SENDER and EMAIL_PASSWORD "
+            "(GitHub: Settings → Secrets → Actions)"
         )
         return False
 
     if not recipients:
-        logger.error("No recipients configured – set EMAIL_RECIPIENT env var")
+        logger.error(
+            "No recipients configured – set EMAIL_RECIPIENT env var "
+            "(GitHub secret or config.yaml → email.recipients)"
+        )
         return False
 
-    smtp_host = os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com")
+    smtp_host = os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com").strip()
     smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
 
-    today = datetime.now(tz=timezone.utc).strftime("%b %-d, %Y")
+    today = _format_date_short(datetime.now(tz=timezone.utc))
     subject_prefix = email_cfg.get("subject_prefix", "[Job Alert]")
     subject = f"{subject_prefix} {len(jobs)} New Job{'s' if len(jobs) != 1 else ''} for You – {today}"
 
@@ -271,20 +289,44 @@ def send_email(
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.ehlo()
-            smtp.login(sender, password)
-            smtp.sendmail(sender, recipients, msg.as_bytes())
+        _smtp_send(smtp_host, smtp_port, sender, password, recipients, msg)
         logger.info("Email sent to %s with %d jobs", recipients, len(jobs))
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error(
-            "SMTP authentication failed. For Gmail, use an App Password: "
-            "https://myaccount.google.com/apppasswords"
+            "SMTP authentication failed for %s. Use a Gmail App Password (not your "
+            "login password): https://myaccount.google.com/apppasswords — and add it "
+            "as the EMAIL_PASSWORD secret (no quotes).",
+            sender,
         )
         return False
-    except Exception as exc:
-        logger.error("Failed to send email: %s", exc)
+    except smtplib.SMTPException as exc:
+        logger.error("SMTP error sending email via %s:%d – %s", smtp_host, smtp_port, exc)
         return False
+    except Exception as exc:
+        logger.error("Failed to send email: %s: %s", type(exc).__name__, exc)
+        return False
+
+
+def _smtp_send(
+    host: str,
+    port: int,
+    sender: str,
+    password: str,
+    recipients: list[str],
+    msg: MIMEMultipart,
+) -> None:
+    """Send via STARTTLS (587) or SMTPS (465) depending on port/env."""
+    payload = msg.as_bytes()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+            smtp.login(sender, password)
+            smtp.sendmail(sender, recipients, payload)
+        return
+
+    with smtplib.SMTP(host, port, timeout=30) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(sender, password)
+        smtp.sendmail(sender, recipients, payload)
