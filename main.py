@@ -177,10 +177,20 @@ def main() -> None:
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--test-email",
+        action="store_true",
+        help="Send a one-line test email (verify SMTP secrets) and exit",
+    )
     args = parser.parse_args()
 
     setup_logging(args.verbose)
     config = load_config(args.config)
+
+    if args.test_email:
+        from src.email_sender import send_test_email
+        ok = send_test_email(config)
+        sys.exit(0 if ok else 1)
 
     if args.list_sources:
         sources = config.get("search", {}).get("sources", {})
