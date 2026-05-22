@@ -71,11 +71,25 @@ jobs:
           if [ "$missing" -eq 1 ]; then
             exit 1
           fi
+          len="${#EMAIL_PASSWORD}"
+          norm="${EMAIL_PASSWORD//[[:space:]-]/}"
           echo "Email secrets present (sender=${EMAIL_SENDER}, recipient=${EMAIL_RECIPIENT})"
+          echo "EMAIL_PASSWORD length: ${len} (normalized: ${#norm}, Gmail expects 16)"
+          if [ "${#norm}" != "16" ]; then
+            echo "::warning::EMAIL_PASSWORD should be a 16-character Gmail App Password (no spaces/dashes)"
+          fi
         env:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+
+      - name: Test SMTP (send one email)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+        run: python main.py --test-email --verbose
 
       - name: Run job alert (normal)
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.send_test != 'true' }}

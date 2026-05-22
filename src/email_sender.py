@@ -52,8 +52,24 @@ def _format_date_short(dt: datetime) -> str:
 
 
 def _normalize_smtp_password(password: str) -> str:
-    """Gmail app passwords are often pasted as 'xxxx xxxx xxxx xxxx'."""
-    return password.strip().replace(" ", "")
+    """Gmail app passwords: 16 chars, often pasted as 'xxxx xxxx' or 'xxxx-xxxx-xxxx-xxxx'."""
+    p = password.strip().strip('"').strip("'")
+    for ch in (" ", "-", "\n", "\r", "\t"):
+        p = p.replace(ch, "")
+    return p
+
+
+def _validate_gmail_app_password(password: str) -> str | None:
+    """Return a warning message if password length looks wrong for Gmail."""
+    if not password:
+        return "EMAIL_PASSWORD is empty"
+    if len(password) != 16:
+        return (
+            f"EMAIL_PASSWORD length is {len(password)} (Gmail App Passwords are exactly 16 "
+            "characters). Regenerate at https://myaccount.google.com/apppasswords — paste "
+            "without spaces or dashes."
+        )
+    return None
 
 
 def _source_color(source: str) -> str:
@@ -236,6 +252,38 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
     return "\n".join(lines)
 
 
+def send_test_email(config: dict) -> bool:
+    """Send a minimal test message to verify SMTP credentials."""
+    from .job_searcher import JobPosting
+
+    dummy = JobPosting(
+        id="test-1",
+        title="SMTP test – auto-job-bot",
+        company="Test",
+        location="India",
+        remote=False,
+        job_type="full-time",
+        description="If you received this, email is configured correctly.",
+        apply_url="https://www.naukri.com/",
+        posted_at="",
+        salary="",
+        source="Test",
+        relevance_score=100,
+    )
+
+    class _Profile:
+        name = "Test"
+        location_display = "India"
+        experience_level = "mid"
+        years_experience = 0
+        primary_skills: list[str] = []
+
+    print("Sending test email…", flush=True)
+    ok = send_email([dummy], _Profile(), config)
+    print("Test email OK" if ok else "Test email FAILED – see errors above", flush=True)
+    return ok
+
+
 def send_email(
     jobs: list[JobPosting],
     profile: Any,
@@ -261,6 +309,12 @@ def send_email(
             "Email not configured – set EMAIL_SENDER and EMAIL_PASSWORD "
             "(GitHub: Settings → Secrets → Actions)"
         )
+        return False
+
+    pw_warn = _validate_gmail_app_password(password)
+    if pw_warn and "gmail.com" in sender.lower():
+        logger.error(pw_warn)
+        print(f"\n::error::{pw_warn}\n", flush=True)
         return False
 
     if not recipients:
@@ -292,13 +346,16 @@ def send_email(
         _smtp_send(smtp_host, smtp_port, sender, password, recipients, msg)
         logger.info("Email sent to %s with %d jobs", recipients, len(jobs))
         return True
-    except smtplib.SMTPAuthenticationError:
-        logger.error(
-            "SMTP authentication failed for %s. Use a Gmail App Password (not your "
-            "login password): https://myaccount.google.com/apppasswords — and add it "
-            "as the EMAIL_PASSWORD secret (no quotes).",
-            sender,
+    except smtplib.SMTPAuthenticationError as exc:
+        hint = (
+            f"SMTP login rejected for {sender} (535 BadCredentials). "
+            "Create a NEW Gmail App Password at https://myaccount.google.com/apppasswords "
+            "(Google Account → Security → 2-Step Verification must be ON → App passwords). "
+            "Put the 16-character password in EMAIL_PASSWORD with no spaces or dashes. "
+            "EMAIL_SENDER must be the same Gmail account."
         )
+        logger.error("%s Detail: %s", hint, exc)
+        print(f"\n::error::{hint}\n", flush=True)
         return False
     except smtplib.SMTPException as exc:
         logger.error("SMTP error sending email via %s:%d – %s", smtp_host, smtp_port, exc)
@@ -316,17 +373,28 @@ def _smtp_send(
     recipients: list[str],
     msg: MIMEMultipart,
 ) -> None:
-    """Send via STARTTLS (587) or SMTPS (465) depending on port/env."""
+    """Send via STARTTLS (587), with fallback to SMTPS (465) on auth failure."""
     payload = msg.as_bytes()
-    if port == 465:
-        with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+    last_auth_error: smtplib.SMTPAuthenticationError | None = None
+
+    if port != 465:
+        try:
+            with smtplib.SMTP(host, port, timeout=30) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                smtp.login(sender, password)
+                smtp.sendmail(sender, recipients, payload)
+            return
+        except smtplib.SMTPAuthenticationError as exc:
+            last_auth_error = exc
+            logger.warning("SMTP %d auth failed, retrying with SSL port 465…", port)
+
+    try:
+        with smtplib.SMTP_SSL(host, 465, timeout=30) as smtp:
             smtp.login(sender, password)
             smtp.sendmail(sender, recipients, payload)
-        return
-
-    with smtplib.SMTP(host, port, timeout=30) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        smtp.login(sender, password)
-        smtp.sendmail(sender, recipients, payload)
+    except smtplib.SMTPAuthenticationError:
+        if last_auth_error:
+            raise last_auth_error from None
+        raise
