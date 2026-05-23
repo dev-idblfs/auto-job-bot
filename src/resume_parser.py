@@ -28,6 +28,7 @@ class ResumeProfile:
         # Personal / location
         self.name: str = personal.get("name", "")
         self.email: str = personal.get("email", "")
+        self.phone: str = personal.get("phone", "")
         loc = personal.get("location", {})
         self.city: str = loc.get("city", "")
         self.state: str = loc.get("state", "")
@@ -38,13 +39,19 @@ class ResumeProfile:
         # Target job preferences
         self.target_titles: list[str] = target.get("job_titles", [])
         self.job_types: list[str] = target.get("job_types", ["full-time"])
+        self.job_types_normalized: set[str] = {
+            jt.lower().replace("-", " ").replace("_", " ")
+            for jt in self.job_types
+        }
         self.experience_level: str = target.get("experience_level", "mid")
         self.min_salary: int = target.get("min_salary", 0)
+        self.salary_currency: str = target.get("salary_currency", "INR")
         self.target_industries: list[str] = target.get("industries", [])
 
         # Experience
         self.years_experience: int = experience.get("years_total", 0)
         self.current_title: str = experience.get("current_title", "")
+        self.current_company: str = experience.get("current_company", "")
 
         # Skills – flatten to a single set of lowercase strings
         all_skills: list[str] = []
@@ -54,17 +61,20 @@ class ResumeProfile:
         self.skills_lower: set[str] = {s.lower() for s in all_skills}
         self.primary_skills: list[str] = skills_data.get("primary", [])
 
-        # Project keywords
+        # Projects – raw data kept for email display (matched project names)
+        self.projects_raw: list[dict] = projects
         project_techs: list[str] = []
-        project_words: list[str] = []
+        project_names: list[str] = []
         for proj in projects:
             project_techs.extend(proj.get("technologies", []))
-            desc = proj.get("description", "")
-            project_words.extend(desc.lower().split())
+            name = proj.get("name", "")
+            if name:
+                project_names.append(name)
         self.project_technologies: list[str] = list(set(project_techs))
         self.project_tech_lower: set[str] = {t.lower() for t in self.project_technologies}
+        self.project_names: list[str] = project_names
 
-        # Combined keyword pool for matching
+        # Combined keyword pool for matching (skills + project techs)
         self.all_keywords: set[str] = self.skills_lower | self.project_tech_lower
 
         # Location strings for matching
@@ -82,9 +92,9 @@ class ResumeProfile:
     def get_search_queries(self) -> list[str]:
         """Return a list of search query strings derived from the profile."""
         queries = list(self.target_titles)
-        # Add primary-skill + title combos for richer search
-        for title in self.target_titles[:2]:
-            for skill in self.primary_skills[:2]:
+        # Primary-skill + title combos for richer search
+        for title in self.target_titles[:3]:
+            for skill in self.primary_skills[:3]:
                 queries.append(f"{title} {skill}")
         return queries
 
@@ -92,7 +102,8 @@ class ResumeProfile:
         return (
             f"<ResumeProfile name={self.name!r} "
             f"level={self.experience_level} "
-            f"location={self.location_display!r}>"
+            f"location={self.location_display!r} "
+            f"job_types={self.job_types}>"
         )
 
 
@@ -107,5 +118,11 @@ def load_resume(path: str | Path = "resume.json") -> ResumeProfile:
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     profile = ResumeProfile(data)
-    logger.info("Loaded resume for: %s (%s)", profile.name, profile.location_display)
+    logger.info(
+        "Loaded resume for: %s (%s) | %d yrs exp | looking for: %s",
+        profile.name,
+        profile.location_display,
+        profile.years_experience,
+        ", ".join(profile.job_types),
+    )
     return profile
