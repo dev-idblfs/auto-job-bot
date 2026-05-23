@@ -144,16 +144,41 @@ filters:
 
 ## Scoring System
 
-Each job gets a 0–100 relevance score:
+Each job gets a 0–100 relevance score built from **6 components**:
 
-| Component | Weight | Logic |
+| Component | Default Weight | Logic |
 |---|---|---|
-| **Title match** | 30 pts | Exact/partial match vs. your target titles |
-| **Skills match** | 40 pts | % of your skills/tech stack found in the job |
+| **Title match** | 25 pts | Exact/partial match vs. your target job titles |
+| **Skills match** | 30 pts | % of your skills/tech stack found in the job posting |
+| **Projects match** | 10 pts | Technologies from your own projects found in the job |
 | **Location match** | 15 pts | City match, remote flag, or relocation willingness |
-| **Experience level** | 15 pts | Junior/mid/senior keywords match your profile |
+| **Experience level** | 15 pts | Years of experience + junior/mid/senior keyword fit |
+| **Job type match** | 5 pts | Employment type (full-time, contract, etc.) alignment |
 
-Weights are configurable in `config.yaml → scoring`.
+All weights are configurable in `config.yaml → scoring`.
+
+### Email digest highlights
+
+Each job card in the email shows:
+- **Matched skills** — which of your skills the job explicitly mentions
+- **Matched projects** — which of your projects share technologies with the job
+- **Job type badge** — Full-Time, Contract, Freelance, etc.
+- **Apply Now** button with the direct application link
+
+### Job type / term filtering
+
+Set `job_types` in `resume.json → target` to your preferred employment terms:
+
+```json
+"job_types": ["full-time", "contract"]
+```
+
+Enable strict filtering in `config.yaml`:
+
+```yaml
+filters:
+  filter_by_job_types: true   # only show jobs matching your desired types
+```
 
 ---
 

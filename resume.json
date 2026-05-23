@@ -1,14 +1,14 @@
 {
   "personal": {
     "name": "Your Name",
-    "email": "your.email@example.com",
-    "phone": "+1-555-000-0000",
+    "email": "your.email@gmail.com",
+    "phone": "+91-9999999999",
     "location": {
-      "city": "San Francisco",
-      "state": "CA",
-      "country": "USA",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "country": "India",
       "remote_ok": true,
-      "willing_to_relocate": false
+      "willing_to_relocate": true
     }
   },
   "target": {
@@ -16,13 +16,14 @@
       "Software Engineer",
       "Backend Engineer",
       "Full Stack Engineer",
-      "Python Developer"
+      "Python Developer",
+      "Software Developer"
     ],
     "job_types": ["full-time", "contract"],
     "experience_level": "mid",
-    "min_salary": 90000,
-    "salary_currency": "USD",
-    "industries": ["technology", "fintech", "saas", "startup"]
+    "min_salary": 1200000,
+    "salary_currency": "INR",
+    "industries": ["technology", "fintech", "saas", "startup", "ecommerce"]
   },
   "experience": {
     "years_total": 4,
@@ -68,8 +69,8 @@
     }
   ],
   "education": {
-    "degree": "B.S. Computer Science",
-    "institution": "State University",
+    "degree": "B.E. / B.Tech Computer Science",
+    "institution": "Your University",
     "graduation_year": 2020
   },
   "certifications": [
