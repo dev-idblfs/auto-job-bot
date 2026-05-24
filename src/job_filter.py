@@ -2,10 +2,11 @@
 Job filter & scorer: ranks job postings by relevance to the resume profile.
 
 Scoring breakdown (configurable weights in config.yaml):
-  - Title match  (30 pts): does the job title match desired titles?
-  - Skills match (40 pts): how many resume skills appear in the posting?
-  - Location     (15 pts): does location match or is it remote?
-  - Experience   (15 pts): does level language match profile's experience level?
+  - Title match    (25 pts): does the job title match desired titles?
+  - Skills match   (30 pts): how many resume skills appear in the posting?
+  - Projects match (15 pts): do project technologies appear in the posting?
+  - Location       (15 pts): does location match or is it remote?
+  - Experience     (15 pts): does level language match profile's experience level?
 """
 
 from __future__ import annotations
@@ -75,6 +76,22 @@ def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
     return int(weight * combined)
 
 
+def _score_projects(text: str, profile: ResumeProfile, weight: int) -> int:
+    """
+    Points for project-technology mentions in the job text.
+
+    Project technologies represent proven, hands-on experience so they carry
+    dedicated weight separate from general skills matching.
+    """
+    if not profile.project_tech_lower:
+        return int(weight * 0.5)  # No projects listed – neutral partial credit
+
+    text_lower = text.lower()
+    matched = sum(1 for tech in profile.project_tech_lower if tech in text_lower)
+    ratio = min(matched / len(profile.project_tech_lower), 1.0)
+    return int(weight * ratio)
+
+
 def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int:
     """Points for location match or remote compatibility."""
     loc_lower = job.location.lower()
@@ -125,8 +142,9 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
 def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
     """Compute and return a 0-100 relevance score for a job posting."""
     scoring = config.get("scoring", {})
-    title_w = scoring.get("title_match_weight", 30)
-    skills_w = scoring.get("skills_match_weight", 40)
+    title_w = scoring.get("title_match_weight", 25)
+    skills_w = scoring.get("skills_match_weight", 30)
+    proj_w = scoring.get("project_match_weight", 15)
     loc_w = scoring.get("location_match_weight", 15)
     exp_w = scoring.get("experience_match_weight", 15)
 
@@ -135,6 +153,7 @@ def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
     score = (
         _score_title(job.title, profile, title_w)
         + _score_skills(full_text, profile, skills_w)
+        + _score_projects(full_text, profile, proj_w)
         + _score_location(job, profile, loc_w)
         + _score_experience(full_text, profile, exp_w, config)
     )
@@ -180,6 +199,27 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
             matched_loc = any(lo.lower() in loc_lower for lo in location_overrides)
             if not matched_loc:
                 return False
+
+    # Job type filter: only apply when the job type is positively known AND
+    # it conflicts with what the candidate wants. Unknown / undetected job
+    # types ("full-time" as fallback) are NOT filtered out.
+    desired_types: list[str] = (
+        filter_cfg.get("job_types")  # explicit config override
+        or getattr(profile, "job_types", [])
+    )
+    if desired_types and job.job_type:
+        jt = job.job_type.lower().strip()
+        # Normalise common variants
+        jt_norm = jt.replace("_", "-").replace(" ", "-")
+        desired_norm = [d.lower().replace("_", "-").replace(" ", "-") for d in desired_types]
+        # Only exclude when we have a hard mismatch (not "full-time" fallback)
+        # and none of the desired types match
+        if jt_norm not in desired_norm and jt_norm not in ("full-time",):
+            logger.debug(
+                "Excluded %r – job type %r not in desired %s",
+                job.title, job.job_type, desired_types,
+            )
+            return False
 
     return True
 
