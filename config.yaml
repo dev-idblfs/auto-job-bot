@@ -47,6 +47,11 @@ filters:
   # Leave empty to auto-build from resume.json → target.job_titles
   job_titles: []
 
+  # Override desired job types from resume.json (optional)
+  # Leave empty to use resume.json → target.job_types
+  # Accepted values: full-time, part-time, contract, freelance, internship
+  job_types: []              # e.g. ["full-time", "contract"]
+
   # Every job MUST contain at least one of these keywords (optional)
   required_keywords: []      # e.g. ["Python"] to only show Python jobs
 
@@ -99,8 +104,9 @@ filters:
 
 scoring:
   # Relevance scoring weights (must sum to 100)
-  title_match_weight: 30      # Does job title match desired titles?
-  skills_match_weight: 40     # How many resume skills appear in job description?
+  title_match_weight: 25      # Does job title match desired titles?
+  skills_match_weight: 30     # How many resume skills appear in job description?
+  project_match_weight: 15    # Do technologies from resume projects appear in job description?
   location_match_weight: 15   # Does location match or is it remote?
   experience_match_weight: 15 # Does experience language match profile level?
 
