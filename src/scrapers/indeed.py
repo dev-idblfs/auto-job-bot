@@ -12,7 +12,7 @@ import re
 from urllib.parse import quote_plus
 
 from ..job_searcher import JobPosting
-from .base import BaseJobScraper, get_session, polite_sleep, parse_html
+from .base import BaseJobScraper, detect_job_type, get_session, polite_sleep, parse_html
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ def _parse_indeed_page(soup, seen: set[str]) -> list[JobPosting]:
                 company=company,
                 location=location or "India",
                 remote="remote" in location.lower() or "work from home" in location.lower(),
-                job_type="full-time",
+                job_type=detect_job_type(title, snippet),
                 description=snippet,
                 apply_url=apply_url,
                 posted_at=posted,

@@ -11,7 +11,7 @@ import logging
 import re
 
 from ..job_searcher import JobPosting
-from .base import BaseJobScraper, http_get, polite_sleep
+from .base import BaseJobScraper, detect_job_type, http_get, polite_sleep
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +148,12 @@ def _is_remote(item: dict) -> bool:
 
 
 def _map_job_type(item: dict) -> str:
-    wfh = item.get("isWFHJob", False)
-    if wfh:
-        return "remote"
-    return "full-time"
+    title = item.get("title", "")
+    desc = item.get("jobDescription", "")
+    job_type_field = item.get("jobType", item.get("employmentType", ""))
+    if job_type_field:
+        return detect_job_type(title, job_type_field, fallback="full-time")
+    return detect_job_type(title, desc, fallback="full-time")
 
 
 def _parse_posted_date(item: dict) -> str:

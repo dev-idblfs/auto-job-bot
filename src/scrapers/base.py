@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import time
 from abc import ABC, abstractmethod
 from typing import Any
@@ -16,6 +17,26 @@ from bs4 import BeautifulSoup
 from ..job_searcher import JobPosting
 
 logger = logging.getLogger(__name__)
+
+# Keywords that signal each job type in titles / descriptions
+_JOB_TYPE_KEYWORDS: dict[str, list[str]] = {
+    "full-time": [
+        "full time", "full-time", "permanent", "regular employee", "payroll",
+    ],
+    "part-time": [
+        "part time", "part-time", "parttime",
+    ],
+    "contract": [
+        "contract", "contractor", "contractual", "c2h", "contract to hire",
+        "fixed term", "fixed-term",
+    ],
+    "freelance": [
+        "freelance", "freelancer", "independent consultant",
+    ],
+    "internship": [
+        "intern", "internship", "trainee", "apprentice",
+    ],
+}
 
 REQUEST_TIMEOUT = 20
 MAX_RETRIES = 3
@@ -28,6 +49,20 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
 ]
+
+
+def detect_job_type(title: str, description: str, fallback: str = "full-time") -> str:
+    """
+    Infer job type from title and description text.
+
+    Returns the first matching type from ``_JOB_TYPE_KEYWORDS`` or ``fallback``
+    if none of the keywords are found.
+    """
+    text = f"{title} {description}".lower()
+    for job_type, keywords in _JOB_TYPE_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            return job_type
+    return fallback
 
 
 def get_session(extra_headers: dict | None = None) -> requests.Session:

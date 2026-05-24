@@ -18,7 +18,7 @@ import time
 from urllib.parse import urlencode, urlparse
 
 from ..job_searcher import JobPosting
-from .base import BaseJobScraper, get_session, http_get, polite_sleep, parse_html
+from .base import BaseJobScraper, detect_job_type, get_session, http_get, polite_sleep, parse_html
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +84,15 @@ class LinkedInJobsScraper(BaseJobScraper):
                         href = link_el["href"]
                         apply_url = href if href.startswith("http") else f"https://www.linkedin.com{href}"
 
+                    title_text = _text(title_el)
                     jobs.append(
                         JobPosting(
                             id=f"linkedin-{job_id}",
-                            title=_text(title_el),
+                            title=title_text,
                             company=_text(company_el),
                             location=_text(location_el),
                             remote="remote" in _text(location_el).lower(),
-                            job_type="full-time",
+                            job_type=detect_job_type(title_text, ""),
                             description="",
                             apply_url=apply_url,
                             posted_at=card.find("time", {"datetime": True})["datetime"]
@@ -139,7 +140,7 @@ def _extract_li_job_id(card) -> str:
 
 
 def _enrich_job_description(job: JobPosting) -> None:
-    """Fetch job description from LinkedIn detail API."""
+    """Fetch job description from LinkedIn detail API and refine job type."""
     job_num = job.id.replace("linkedin-", "")
     try:
         resp = http_get(
@@ -150,6 +151,7 @@ def _enrich_job_description(job: JobPosting) -> None:
         desc_el = soup.find("div", {"class": re.compile(r"description|show-more-less-html", re.I)})
         if desc_el:
             job.description = desc_el.get_text(separator=" ", strip=True)[:2000]
+            job.job_type = detect_job_type(job.title, job.description, fallback=job.job_type)
     except Exception:
         pass
 

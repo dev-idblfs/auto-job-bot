@@ -11,7 +11,7 @@ import logging
 import re
 
 from ..job_searcher import JobPosting
-from .base import BaseJobScraper, get_session, polite_sleep, parse_html
+from .base import BaseJobScraper, detect_job_type, get_session, polite_sleep, parse_html
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def _parse_internshala_page(soup, seen: set[str], query: str) -> list[JobPosting
                 company=company,
                 location=location,
                 remote="remote" in location.lower() or "work from home" in location.lower(),
-                job_type="full-time",
+                job_type=detect_job_type(title, ""),
                 description="",
                 apply_url=apply_url,
                 posted_at="",
