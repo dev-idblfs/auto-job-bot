@@ -65,6 +65,28 @@ def _score_badge(score: int) -> str:
     )
 
 
+_JOB_TYPE_STYLES: dict[str, tuple[str, str]] = {
+    "full-time":   ("#e8f5e9", "#2e7d32"),
+    "contract":    ("#fff3e0", "#e65100"),
+    "part-time":   ("#e3f2fd", "#1565c0"),
+    "freelance":   ("#f3e5f5", "#6a1b9a"),
+    "internship":  ("#fce4ec", "#880e4f"),
+}
+
+
+def _job_type_badge(job_type: str) -> str:
+    if not job_type:
+        return ""
+    jt = job_type.lower().strip()
+    bg, fg = _JOB_TYPE_STYLES.get(jt, ("#f5f5f5", "#555555"))
+    label = job_type.replace("-", " ").title()
+    return (
+        f'<span style="background:{bg};color:{fg};font-size:11px;'
+        f'padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">'
+        f'{label}</span>'
+    )
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -72,6 +94,7 @@ def _job_card_html(job: JobPosting) -> str:
         if job.remote
         else ""
     )
+    type_badge = _job_type_badge(job.job_type)
     salary_line = (
         f'<div style="color:#388e3c;font-size:13px;margin-top:4px;">💰 {job.salary}</div>'
         if job.salary
@@ -86,7 +109,7 @@ def _job_card_html(job: JobPosting) -> str:
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
     <div>
       <div style="font-size:17px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">
-        {job.title}{remote_badge}
+        {job.title}{remote_badge}{type_badge}
       </div>
       <div style="font-size:14px;color:#444;margin-bottom:2px;">
         🏢 <strong>{job.company}</strong>
@@ -212,6 +235,7 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
             f"\n{i}. {job.title}",
             f"   Company  : {job.company}",
             f"   Location : {job.location}{'  [REMOTE]' if job.remote else ''}",
+            f"   Job Type : {job.job_type or 'Not specified'}",
             f"   Salary   : {job.salary or 'Not specified'}",
             f"   Source   : {job.source}",
             f"   Score    : {job.relevance_score}%",
