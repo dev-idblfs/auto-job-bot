@@ -38,15 +38,28 @@ search:
     company_careers: true     # Scrape career pages of top Indian tech companies
 
 filters:
-  # Override resume.json location here (optional)
-  # Leave empty to use city/state from resume.json
-  locations: []              # e.g. ["Bengaluru", "Mumbai", "Remote"]
-  remote_only: false         # true = only show remote/WFH jobs
+  # ── Location ──────────────────────────────────────────────
+  # Override resume.json location here (optional).
+  # Leave empty to use city/state from resume.json.
+  # Jobs must match one of these OR be remote.
+  locations: []              # e.g. ["Bengaluru", "Mumbai", "Hyderabad", "Remote"]
 
-  # Override desired job titles from resume.json (optional)
+  # true = only show remote/WFH jobs
+  remote_only: false
+
+  # ── Job Titles ────────────────────────────────────────────
+  # Override desired job titles from resume.json (optional).
   # Leave empty to auto-build from resume.json → target.job_titles
   job_titles: []
 
+  # ── Job Types ─────────────────────────────────────────────
+  # Restrict to specific employment types.
+  # Leave empty to use values from resume.json → target.job_types.
+  # Supported values: full-time, part-time, contract, internship
+  # Jobs with an unspecified type are always included.
+  job_types: []              # e.g. ["full-time", "contract"]
+
+  # ── Keyword Guards ────────────────────────────────────────
   # Every job MUST contain at least one of these keywords (optional)
   required_keywords: []      # e.g. ["Python"] to only show Python jobs
 
@@ -62,7 +75,8 @@ filters:
     - "unpaid"
     - "commission only"
 
-  # Experience level keyword mapping used for scoring
+  # ── Experience Level Keywords ─────────────────────────────
+  # Mapped to resume.json → target.experience_level for scoring.
   experience_levels:
     junior:
       keywords:
@@ -98,11 +112,20 @@ filters:
         - "experienced"
 
 scoring:
-  # Relevance scoring weights (must sum to 100)
-  title_match_weight: 30      # Does job title match desired titles?
-  skills_match_weight: 40     # How many resume skills appear in job description?
-  location_match_weight: 15   # Does location match or is it remote?
-  experience_match_weight: 15 # Does experience language match profile level?
+  # ── Relevance Scoring Weights ─────────────────────────────
+  # All weights must sum to 100.
+  #
+  # title_match_weight    – Does job title match desired titles?
+  # skills_match_weight   – How many resume skills appear in job description?
+  # projects_match_weight – Do project domain keywords appear? (e.g. e-commerce,
+  #                         real-time analytics, microservices)
+  # location_match_weight – Does location match resume city/region or is remote?
+  # experience_match_weight – Does experience language match profile level?
+  title_match_weight:     30
+  skills_match_weight:    30
+  projects_match_weight:  10
+  location_match_weight:  15
+  experience_match_weight: 15
 
 deduplication:
   # Skip jobs already seen in previous runs

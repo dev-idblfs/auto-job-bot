@@ -2,15 +2,16 @@
   "personal": {
     "name": "Your Name",
     "email": "your.email@example.com",
-    "phone": "+1-555-000-0000",
+    "phone": "+91-98765-43210",
     "location": {
-      "city": "San Francisco",
-      "state": "CA",
-      "country": "USA",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "country": "India",
       "remote_ok": true,
       "willing_to_relocate": false
     }
   },
+
   "target": {
     "job_titles": [
       "Software Engineer",
@@ -18,12 +19,13 @@
       "Full Stack Engineer",
       "Python Developer"
     ],
-    "job_types": ["full-time", "contract"],
+    "job_types": ["full-time"],
     "experience_level": "mid",
-    "min_salary": 90000,
-    "salary_currency": "USD",
-    "industries": ["technology", "fintech", "saas", "startup"]
+    "min_salary": 1200000,
+    "salary_currency": "INR",
+    "industries": ["technology", "fintech", "saas", "startup", "ecommerce"]
   },
+
   "experience": {
     "years_total": 4,
     "current_title": "Software Engineer",
@@ -33,45 +35,49 @@
         "title": "Software Engineer",
         "company": "Tech Corp",
         "years": 2,
-        "description": "Built scalable REST APIs using Python/FastAPI, managed PostgreSQL databases, deployed microservices on AWS"
+        "description": "Built scalable REST APIs using Python and FastAPI; managed PostgreSQL databases; deployed microservices on AWS; led code reviews and mentored junior developers."
       },
       {
         "title": "Junior Developer",
         "company": "Startup Inc",
         "years": 2,
-        "description": "Developed React frontend applications, integrated third-party APIs, worked with Node.js and MongoDB"
+        "description": "Developed React frontend applications; integrated third-party payment and analytics APIs; built backend services with Node.js and MongoDB; implemented CI/CD pipelines."
       }
     ]
   },
+
   "skills": {
     "primary": ["Python", "FastAPI", "Django", "PostgreSQL", "REST APIs"],
     "secondary": ["React", "JavaScript", "TypeScript", "Node.js", "MongoDB"],
-    "cloud": ["AWS", "Docker", "Kubernetes", "CI/CD"],
-    "tools": ["Git", "Linux", "Redis", "RabbitMQ"],
-    "soft": ["agile", "scrum", "team leadership", "code review"]
+    "cloud": ["AWS", "Docker", "Kubernetes", "CI/CD", "GitHub Actions"],
+    "tools": ["Git", "Linux", "Redis", "RabbitMQ", "Nginx"],
+    "soft": ["agile", "scrum", "team leadership", "code review", "system design"]
   },
+
   "projects": [
     {
       "name": "E-Commerce Platform",
-      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users",
-      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS"]
+      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users, product catalog, shopping cart, and payment integration.",
+      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS", "Stripe"]
     },
     {
       "name": "Real-time Analytics Dashboard",
-      "description": "Developed a real-time analytics dashboard using WebSockets, Python, and React with data visualization",
-      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker"]
+      "description": "Developed a real-time analytics dashboard using WebSockets, FastAPI, and React with interactive data visualisation charts and time-series aggregation.",
+      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker", "Chart.js"]
     },
     {
       "name": "Microservices Migration",
-      "description": "Led migration of monolithic app to microservices architecture using Docker and Kubernetes",
-      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL"]
+      "description": "Led migration of a monolithic application to microservices architecture; implemented service mesh, message queues, and distributed tracing.",
+      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL", "Prometheus", "Grafana"]
     }
   ],
+
   "education": {
-    "degree": "B.S. Computer Science",
-    "institution": "State University",
+    "degree": "B.E. Computer Science",
+    "institution": "Visvesvaraya Technological University",
     "graduation_year": 2020
   },
+
   "certifications": [
     "AWS Certified Developer – Associate",
     "Docker Certified Associate"

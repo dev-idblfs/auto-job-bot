@@ -21,7 +21,7 @@ resume.json  +  config.yaml
 
 1. **Reads your resume** from `resume.json` to extract skills, experience level, location, and target job titles.
 2. **Scrapes 9 job sources** in parallel (LinkedIn, Naukri, Indeed India, Foundit, Hirist, Cutshort, Internshala, LinkedIn Posts, Company Career Pages).
-3. **Scores each job** 0–100 based on title match, skills overlap, location fit, and experience level.
+3. **Scores each job** 0–100 based on title match, skills overlap, project domain alignment, location fit, and experience level.
 4. **Deduplicates** – remembers which jobs were already sent so you never see the same posting twice.
 5. **Emails a digest** with rich HTML cards including company, location, salary, match score, and a direct **Apply Now** link.
 
@@ -41,25 +41,48 @@ pip install -r requirements.txt
 
 ### 2 · Edit your resume
 
-Open `resume.json` and fill in your details:
+Open `resume.json` and fill in your details. **The more detail you add, the better the matching:**
 
 ```jsonc
 {
   "personal": {
     "name": "Your Name",
-    "location": { "city": "Bengaluru", "country": "India", "remote_ok": true }
+    "location": { "city": "Bengaluru", "state": "Karnataka", "country": "India",
+                  "remote_ok": true, "willing_to_relocate": false }
   },
   "target": {
     "job_titles": ["Backend Engineer", "Python Developer", "SDE-2"],
-    "experience_level": "mid"   // junior | mid | senior
+    "job_types": ["full-time"],          // full-time | part-time | contract | internship
+    "experience_level": "mid",           // junior | mid | senior
+    "industries": ["fintech", "saas"]    // used for bonus scoring
   },
   "skills": {
     "primary":   ["Python", "Django", "FastAPI", "PostgreSQL"],
     "secondary": ["React", "AWS", "Docker"]
-  }
+  },
+  "projects": [
+    {
+      "name": "E-Commerce Platform",
+      "description": "Full-stack e-commerce site with React, Django REST, PostgreSQL, Redis.",
+      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS"]
+    }
+  ]
   // ... see resume.json for full schema
 }
 ```
+
+**Key matching fields:**
+
+| Field | How it affects matching |
+|---|---|
+| `location.city` | Jobs in this city score higher; also used in hard location filter |
+| `location.remote_ok` | Remote jobs score full points when `true` |
+| `target.job_types` | Jobs with a conflicting type (e.g. internship when you want full-time) are filtered out |
+| `target.experience_level` | Sets the experience band matched in job descriptions |
+| `target.industries` | Provides up to 5 bonus points for matching industry keywords |
+| `skills.primary` | Heavily weighted in scoring; drives search queries |
+| `projects[].technologies` | Counted alongside skills; richer project descriptions = better domain matching |
+| `projects[].description` | Domain phrases extracted (e.g. "real-time analytics", "microservices") and matched against job text |
 
 ### 3 · Set environment variables
 
@@ -144,16 +167,39 @@ filters:
 
 ## Scoring System
 
-Each job gets a 0–100 relevance score:
+Each job gets a 0–100 relevance score built from five components:
 
-| Component | Weight | Logic |
+| Component | Default Weight | Logic |
 |---|---|---|
-| **Title match** | 30 pts | Exact/partial match vs. your target titles |
-| **Skills match** | 40 pts | % of your skills/tech stack found in the job |
-| **Location match** | 15 pts | City match, remote flag, or relocation willingness |
-| **Experience level** | 15 pts | Junior/mid/senior keywords match your profile |
+| **Title match** | 30 pts | Exact/partial/word-overlap match vs. your `target.job_titles` |
+| **Skills match** | 30 pts | % of your skills & project technologies found in the job text |
+| **Projects match** | 10 pts | Project domain phrases (e.g. "real-time analytics", "microservices") found in job description |
+| **Location match** | 15 pts | City/region match, remote flag, or `willing_to_relocate` fallback |
+| **Experience level** | 15 pts | Junior/mid/senior keywords match your `experience_level` |
+| **Industry bonus** | +0–5 pts | Target industries found in job text (capped at 100 total) |
 
-Weights are configurable in `config.yaml → scoring`.
+All weights are configurable in `config.yaml → scoring` (title + skills + projects + location + experience must sum to 100).
+
+### Hard filters (applied before scoring)
+
+Jobs that fail any hard filter are dropped entirely, regardless of score:
+
+| Filter | Config key | Default |
+|---|---|---|
+| Excluded keywords | `filters.excluded_keywords` | Blocks VP/Director/10+ year roles |
+| Required keywords | `filters.required_keywords` | Empty (match anything) |
+| Remote only | `filters.remote_only` | `false` |
+| Location whitelist | `filters.locations` | Uses resume city |
+| Job type | `resume.json → target.job_types` | `["full-time"]` |
+
+### Email digest highlights
+
+Each job card in the daily email shows:
+- Match score badge (Excellent / Strong / Good / Partial)
+- Job type badge (Full-Time / Contract / etc.)
+- Salary (when available)
+- **"MATCHED SKILLS & TECH"** — the specific skills/technologies from your profile that appeared in the job description
+- Direct **Apply Now →** button with the full apply link
 
 ---
 
@@ -204,7 +250,10 @@ auto-job-bot/
 ## Tips
 
 - **Too many results?** Raise `min_relevance_score` to 55–65.
-- **Too few results?** Lower `min_relevance_score` to 30, or add more titles to `resume.json → target.job_titles`.
+- **Too few results?** Lower `min_relevance_score` to 30, add more titles to `resume.json → target.job_titles`, or set `search.days_back: 3`.
+- **Contract / freelance jobs:** Add `"contract"` to `resume.json → target.job_types`.
+- **Only want remote jobs:** Set `filters.remote_only: true` in config.yaml.
+- **Specific cities:** Add them to `filters.locations`, e.g. `["Bengaluru", "Hyderabad", "Remote"]`.
 - **Add a company:** Edit `company_careers.json` and add an entry with `name`, `careers_url`, and optionally a CSS `job_list_selector`.
 - **LinkedIn posts:** Enable `linkedin_posts: true` in config.yaml and set `LINKEDIN_EMAIL` / `LINKEDIN_PASSWORD` secrets.
-- **Remote jobs only:** Set `filters.remote_only: true` in config.yaml.
+- **Better project matching:** Write detailed descriptions in `resume.json → projects[].description` — domain phrases like "real-time analytics", "payment gateway", "microservices architecture" are extracted and matched against job descriptions.

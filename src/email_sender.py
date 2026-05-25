@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 # Source badge colours
 SOURCE_COLORS: dict[str, str] = {
-    "LinkedIn":       "#0a66c2",
-    "LinkedIn Post":  "#0a66c2",
-    "Naukri":         "#ff7555",
-    "Indeed India":   "#003a9b",
-    "Foundit":        "#e8433a",
-    "Hirist":         "#6c3ec9",
-    "Cutshort":       "#1c75bc",
-    "Internshala":    "#00aeef",
+    "LinkedIn":        "#0a66c2",
+    "LinkedIn Post":   "#0a66c2",
+    "Naukri":          "#ff7555",
+    "Indeed India":    "#003a9b",
+    "Foundit":         "#e8433a",
+    "Hirist":          "#6c3ec9",
+    "Cutshort":        "#1c75bc",
+    "Internshala":     "#00aeef",
     "Company Careers": "#2e7d32",
 }
 
@@ -49,19 +49,41 @@ def _source_color(source: str) -> str:
     return DEFAULT_COLOR
 
 
-def _score_badge(score: int) -> str:
+def _score_badge(score: int) -> tuple[str, str]:
+    """Return (color, label) for the given relevance score."""
     if score >= 80:
-        color, label = "#1b5e20", "Excellent Match"
-    elif score >= 65:
-        color, label = "#2e7d32", "Strong Match"
-    elif score >= 50:
-        color, label = "#f57f17", "Good Match"
-    else:
-        color, label = "#e65100", "Partial Match"
+        return "#1b5e20", "Excellent Match"
+    if score >= 65:
+        return "#2e7d32", "Strong Match"
+    if score >= 50:
+        return "#f57f17", "Good Match"
+    return "#e65100", "Partial Match"
+
+
+def _score_badge_html(score: int) -> str:
+    color, label = _score_badge(score)
     return (
         f'<span style="background:{color};color:#fff;'
         f"font-size:11px;padding:2px 8px;border-radius:12px;"
         f'font-weight:600;">{label} {score}%</span>'
+    )
+
+
+def _matched_skills_html(skills: list[str]) -> str:
+    """Render small skill pills for skills that matched the job description."""
+    if not skills:
+        return ""
+    pills = "".join(
+        f'<span style="background:#e8f5e9;color:#2e7d32;font-size:11px;'
+        f'padding:2px 7px;border-radius:10px;margin:2px 2px 0 0;'
+        f'display:inline-block;font-weight:500;">{skill}</span>'
+        for skill in skills[:12]  # cap at 12 to keep card compact
+    )
+    return (
+        f'<div style="margin-top:10px;">'
+        f'<span style="font-size:11px;color:#888;font-weight:600;">MATCHED SKILLS &amp; TECH: </span>'
+        f'{pills}'
+        f'</div>'
     )
 
 
@@ -80,13 +102,25 @@ def _job_card_html(job: JobPosting) -> str:
     source_color = _source_color(job.source)
     posted = job.posted_at[:10] if job.posted_at and len(job.posted_at) >= 10 else job.posted_at
 
+    # matched_skills is attached by filter_and_rank_jobs; graceful fallback if absent
+    matched_skills: list[str] = getattr(job, "matched_skills", [])
+    skills_html = _matched_skills_html(matched_skills)
+
+    job_type_badge = ""
+    if job.job_type:
+        job_type_badge = (
+            f'<span style="background:#f3e5f5;color:#6a1b9a;font-size:11px;'
+            f'padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">'
+            f'{job.job_type.title()}</span>'
+        )
+
     return f"""
 <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
             padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.07);">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
-    <div>
+    <div style="flex:1;min-width:0;">
       <div style="font-size:17px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">
-        {job.title}{remote_badge}
+        {job.title}{remote_badge}{job_type_badge}
       </div>
       <div style="font-size:14px;color:#444;margin-bottom:2px;">
         🏢 <strong>{job.company}</strong>
@@ -94,22 +128,25 @@ def _job_card_html(job: JobPosting) -> str:
       </div>
       {salary_line}
     </div>
-    <div style="text-align:right;min-width:140px;">
+    <div style="text-align:right;min-width:145px;margin-left:12px;">
       <span style="background:{source_color};color:#fff;font-size:11px;
                    padding:2px 9px;border-radius:10px;font-weight:600;">
         {job.source}
       </span>
-      <div style="margin-top:6px;">{_score_badge(job.relevance_score)}</div>
+      <div style="margin-top:6px;">{_score_badge_html(job.relevance_score)}</div>
       {"<div style='color:#999;font-size:11px;margin-top:4px;'>📅 " + posted + "</div>" if posted else ""}
     </div>
   </div>
   {"<p style='font-size:13px;color:#555;margin:12px 0 4px;line-height:1.6;'>" + job.short_description + "</p>" if job.short_description else ""}
-  <div style="margin-top:12px;">
+  {skills_html}
+  <div style="margin-top:14px;">
     <a href="{job.apply_url}"
        style="background:#1a1a2e;color:#fff;text-decoration:none;
-              padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;">
+              padding:9px 20px;border-radius:6px;font-size:13px;font-weight:600;
+              display:inline-block;">
       Apply Now →
     </a>
+    <span style="font-size:12px;color:#aaa;margin-left:10px;">{job.apply_url[:60]}{'…' if len(job.apply_url) > 60 else ''}</span>
   </div>
 </div>"""
 
@@ -135,7 +172,25 @@ def build_html_email(
         for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1])
     )
 
+    # Match quality distribution
+    excellent = sum(1 for j in jobs if j.relevance_score >= 80)
+    strong    = sum(1 for j in jobs if 65 <= j.relevance_score < 80)
+    good      = sum(1 for j in jobs if 50 <= j.relevance_score < 65)
+    partial   = sum(1 for j in jobs if j.relevance_score < 50)
+
+    match_summary = "".join([
+        f'<span style="color:#1b5e20;font-weight:600;">{excellent} Excellent</span>, ' if excellent else "",
+        f'<span style="color:#2e7d32;font-weight:600;">{strong} Strong</span>, '         if strong    else "",
+        f'<span style="color:#f57f17;font-weight:600;">{good} Good</span>, '             if good      else "",
+        f'<span style="color:#e65100;font-weight:600;">{partial} Partial</span>'         if partial   else "",
+    ]).rstrip(", ")
+
     cards_html = "\n".join(_job_card_html(j) for j in jobs)
+
+    location_display = profile.location_display or "India"
+    level_display = f"{profile.experience_level.title()} · {profile.years_experience} yrs"
+    skills_display = ", ".join(profile.primary_skills[:6])
+    job_types_display = ", ".join(t.title() for t in profile.job_types) if profile.job_types else "Any"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -145,7 +200,7 @@ def build_html_email(
 <title>Daily Job Alert – {today}</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:680px;margin:0 auto;padding:24px 16px;">
+<div style="max-width:700px;margin:0 auto;padding:24px 16px;">
 
   <!-- Header -->
   <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);
@@ -155,9 +210,12 @@ def build_html_email(
       🎯 Your Daily Job Digest
     </div>
     <div style="font-size:15px;opacity:.85;">
-      Hi <strong>{profile.name or "there"}</strong> — we found
+      Hi <strong>{profile.name or "there"}</strong> — found
       <strong>{job_count} new job{"s" if job_count != 1 else ""}</strong>
       matching your profile today!
+    </div>
+    <div style="margin-top:6px;font-size:13px;opacity:.75;">
+      Match quality: {match_summary}
     </div>
     <div style="margin-top:14px;line-height:1.8;">{source_pills}</div>
   </div>
@@ -165,10 +223,29 @@ def build_html_email(
   <!-- Profile summary strip -->
   <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
               padding:14px 20px;margin-bottom:24px;font-size:13px;color:#555;">
-    <strong>Your Profile:</strong>
-    &nbsp;📍 {profile.location_display or "India"}
-    &nbsp;·&nbsp; 💼 {profile.experience_level.title()} · {profile.years_experience} yrs
-    &nbsp;·&nbsp; 🔑 {", ".join(profile.primary_skills[:5])}
+    <div style="font-weight:700;color:#1a1a2e;margin-bottom:6px;">Your Profile (filter criteria)</div>
+    <table style="border-collapse:collapse;width:100%;">
+      <tr>
+        <td style="padding:3px 12px 3px 0;white-space:nowrap;">📍 <strong>Location</strong></td>
+        <td style="padding:3px 0;">{location_display}{"&nbsp;·&nbsp; Remote OK" if profile.remote_ok else ""}</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 12px 3px 0;white-space:nowrap;">💼 <strong>Experience</strong></td>
+        <td style="padding:3px 0;">{level_display}</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 12px 3px 0;white-space:nowrap;">🔑 <strong>Primary Skills</strong></td>
+        <td style="padding:3px 0;">{skills_display}</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 12px 3px 0;white-space:nowrap;">📋 <strong>Job Types</strong></td>
+        <td style="padding:3px 0;">{job_types_display}</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 12px 3px 0;white-space:nowrap;">🎯 <strong>Targets</strong></td>
+        <td style="padding:3px 0;">{", ".join(profile.target_titles[:4])}</td>
+      </tr>
+    </table>
   </div>
 
   <!-- Job cards -->
@@ -179,7 +256,8 @@ def build_html_email(
               border-top:1px solid #e8e8e8;">
     <p>
       Powered by <strong>auto-job-bot</strong> · India Job Alert System<br>
-      Scraped from LinkedIn, Naukri, Indeed India, Foundit, Hirist, Cutshort &amp; Company Career Pages<br>
+      Matched on: location · experience level · skills · project domains<br>
+      Sources: LinkedIn, Naukri, Indeed India, Foundit, Hirist, Cutshort &amp; Company Career Pages<br>
       To update your preferences, edit <code>resume.json</code> and <code>config.yaml</code>
     </p>
   </div>
@@ -194,8 +272,10 @@ def _empty_state_html() -> str:
             border-radius:10px;border:1px dashed #ddd;">
   <div style="font-size:40px;margin-bottom:12px;">🔍</div>
   <div style="font-size:16px;font-weight:600;margin-bottom:8px;">No new jobs today</div>
-  <div style="font-size:13px;">Try lowering <code>min_relevance_score</code> in config.yaml
-  or adding more job titles to your resume profile.</div>
+  <div style="font-size:13px;">
+    Try lowering <code>min_relevance_score</code> in config.yaml,
+    adding more job titles, or enabling more sources.
+  </div>
 </div>"""
 
 
@@ -205,20 +285,28 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
     lines = [
         f"Daily Job Digest – {today}",
         f"Hi {profile.name or 'there'}, found {len(jobs)} new job(s) today!",
-        "=" * 60,
+        "",
+        f"Profile: {profile.location_display or 'India'} | "
+        f"{profile.experience_level.title()} {profile.years_experience} yrs | "
+        f"Types: {', '.join(t.title() for t in profile.job_types)}",
+        "=" * 65,
     ]
     for i, job in enumerate(jobs, 1):
+        matched: list[str] = getattr(job, "matched_skills", [])
         lines += [
-            f"\n{i}. {job.title}",
-            f"   Company  : {job.company}",
-            f"   Location : {job.location}{'  [REMOTE]' if job.remote else ''}",
-            f"   Salary   : {job.salary or 'Not specified'}",
-            f"   Source   : {job.source}",
-            f"   Score    : {job.relevance_score}%",
-            f"   Apply    : {job.apply_url}",
+            f"\n{i}. [{job.relevance_score}%] {job.title}",
+            f"   Company    : {job.company}",
+            f"   Location   : {job.location}{'  [REMOTE]' if job.remote else ''}",
+            f"   Job Type   : {job.job_type or 'Not specified'}",
+            f"   Salary     : {job.salary or 'Not specified'}",
+            f"   Source     : {job.source}",
+            f"   Posted     : {job.posted_at[:10] if job.posted_at else 'Unknown'}",
+            f"   Matched    : {', '.join(matched[:8]) if matched else 'N/A'}",
+            f"   Apply Link : {job.apply_url}",
         ]
         if job.short_description:
-            lines.append(f"   Summary  : {job.short_description[:200]}")
+            lines.append(f"   Summary    : {job.short_description[:200]}")
+    lines += ["", "=" * 65, "Powered by auto-job-bot · India Job Alert System"]
     return "\n".join(lines)
 
 
@@ -257,7 +345,10 @@ def send_email(
 
     today = datetime.now(tz=timezone.utc).strftime("%b %-d, %Y")
     subject_prefix = email_cfg.get("subject_prefix", "[Job Alert]")
-    subject = f"{subject_prefix} {len(jobs)} New Job{'s' if len(jobs) != 1 else ''} for You – {today}"
+    subject = (
+        f"{subject_prefix} {len(jobs)} New Job{'s' if len(jobs) != 1 else ''} "
+        f"for {profile.name or 'You'} – {today}"
+    )
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -277,7 +368,10 @@ def send_email(
             smtp.ehlo()
             smtp.login(sender, password)
             smtp.sendmail(sender, recipients, msg.as_bytes())
-        logger.info("Email sent to %s with %d jobs", recipients, len(jobs))
+        logger.info(
+            "Email sent to %s with %d jobs (subject: %s)",
+            recipients, len(jobs), subject,
+        )
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error(
