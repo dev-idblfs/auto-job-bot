@@ -65,6 +65,46 @@ def _score_badge(score: int) -> str:
     )
 
 
+_JOB_TYPE_STYLE: dict[str, tuple[str, str]] = {
+    "full-time":  ("#e8f5e9", "#2e7d32"),
+    "contract":   ("#fff8e1", "#f57f17"),
+    "part-time":  ("#e3f2fd", "#1565c0"),
+    "internship": ("#fce4ec", "#ad1457"),
+    "remote":     ("#e3f2fd", "#1565c0"),
+}
+
+
+def _job_type_badge(job_type: str) -> str:
+    """Render a small pill badge for the job type."""
+    if not job_type:
+        return ""
+    jt = job_type.lower().strip()
+    bg, fg = _JOB_TYPE_STYLE.get(jt, ("#f5f5f5", "#555"))
+    label = job_type.replace("-", "\u2011").title()  # non-breaking hyphen
+    return (
+        f'<span style="background:{bg};color:{fg};font-size:11px;'
+        f'padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px;">'
+        f'{label}</span>'
+    )
+
+
+def _matched_keywords_line(job: JobPosting) -> str:
+    """Return an HTML snippet listing the matched skills/keywords."""
+    kws = getattr(job, "matched_keywords", [])
+    if not kws:
+        return ""
+    pills = "".join(
+        f'<span style="background:#f0f4ff;color:#3949ab;font-size:11px;'
+        f'padding:2px 7px;border-radius:8px;margin:2px 2px 0 0;display:inline-block;">'
+        f'{kw}</span>'
+        for kw in kws
+    )
+    return (
+        f'<div style="margin-top:8px;font-size:11px;color:#666;">'
+        f'<strong>Matched:</strong> {pills}</div>'
+    )
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -72,6 +112,7 @@ def _job_card_html(job: JobPosting) -> str:
         if job.remote
         else ""
     )
+    type_badge = _job_type_badge(job.job_type) if not job.remote else ""
     salary_line = (
         f'<div style="color:#388e3c;font-size:13px;margin-top:4px;">💰 {job.salary}</div>'
         if job.salary
@@ -79,6 +120,7 @@ def _job_card_html(job: JobPosting) -> str:
     )
     source_color = _source_color(job.source)
     posted = job.posted_at[:10] if job.posted_at and len(job.posted_at) >= 10 else job.posted_at
+    matched_line = _matched_keywords_line(job)
 
     return f"""
 <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
@@ -86,7 +128,7 @@ def _job_card_html(job: JobPosting) -> str:
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
     <div>
       <div style="font-size:17px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">
-        {job.title}{remote_badge}
+        {job.title}{remote_badge}{type_badge}
       </div>
       <div style="font-size:14px;color:#444;margin-bottom:2px;">
         🏢 <strong>{job.company}</strong>
@@ -104,6 +146,7 @@ def _job_card_html(job: JobPosting) -> str:
     </div>
   </div>
   {"<p style='font-size:13px;color:#555;margin:12px 0 4px;line-height:1.6;'>" + job.short_description + "</p>" if job.short_description else ""}
+  {matched_line}
   <div style="margin-top:12px;">
     <a href="{job.apply_url}"
        style="background:#1a1a2e;color:#fff;text-decoration:none;
@@ -168,6 +211,7 @@ def build_html_email(
     <strong>Your Profile:</strong>
     &nbsp;📍 {profile.location_display or "India"}
     &nbsp;·&nbsp; 💼 {profile.experience_level.title()} · {profile.years_experience} yrs
+    &nbsp;·&nbsp; 📋 {", ".join(jt.title() for jt in (profile.job_types or ["Full-Time"]))[:3]}
     &nbsp;·&nbsp; 🔑 {", ".join(profile.primary_skills[:5])}
   </div>
 
@@ -212,11 +256,15 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
             f"\n{i}. {job.title}",
             f"   Company  : {job.company}",
             f"   Location : {job.location}{'  [REMOTE]' if job.remote else ''}",
+            f"   Type     : {job.job_type or 'Not specified'}",
             f"   Salary   : {job.salary or 'Not specified'}",
             f"   Source   : {job.source}",
             f"   Score    : {job.relevance_score}%",
             f"   Apply    : {job.apply_url}",
         ]
+        kws = getattr(job, "matched_keywords", [])
+        if kws:
+            lines.append(f"   Matched  : {', '.join(kws)}")
         if job.short_description:
             lines.append(f"   Summary  : {job.short_description[:200]}")
     return "\n".join(lines)

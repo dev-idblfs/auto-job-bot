@@ -2,13 +2,14 @@
   "personal": {
     "name": "Your Name",
     "email": "your.email@example.com",
-    "phone": "+1-555-000-0000",
+    "phone": "+91-9999999999",
     "location": {
-      "city": "San Francisco",
-      "state": "CA",
-      "country": "USA",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "country": "India",
       "remote_ok": true,
-      "willing_to_relocate": false
+      "willing_to_relocate": true,
+      "preferred_locations": ["Bengaluru", "Hyderabad", "Pune", "Mumbai", "Remote"]
     }
   },
   "target": {
@@ -16,13 +17,22 @@
       "Software Engineer",
       "Backend Engineer",
       "Full Stack Engineer",
-      "Python Developer"
+      "Python Developer",
+      "Software Developer"
     ],
     "job_types": ["full-time", "contract"],
     "experience_level": "mid",
-    "min_salary": 90000,
-    "salary_currency": "USD",
-    "industries": ["technology", "fintech", "saas", "startup"]
+    "min_salary": 1200000,
+    "salary_currency": "INR",
+    "industries": ["technology", "fintech", "saas", "startup", "ecommerce"],
+    "preferred_terms": [
+      "Python",
+      "REST API",
+      "microservices",
+      "cloud",
+      "AWS",
+      "agile"
+    ]
   },
   "experience": {
     "years_total": 4,
@@ -53,23 +63,23 @@
   "projects": [
     {
       "name": "E-Commerce Platform",
-      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users",
-      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS"]
+      "description": "Built a full-stack e-commerce platform with React frontend and Django REST backend, handling 10k+ daily users. Integrated payment gateway and real-time inventory management.",
+      "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "AWS", "Stripe"]
     },
     {
       "name": "Real-time Analytics Dashboard",
-      "description": "Developed a real-time analytics dashboard using WebSockets, Python, and React with data visualization",
-      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker"]
+      "description": "Developed a real-time analytics dashboard using WebSockets, Python, and React with data visualization for business metrics and KPI tracking.",
+      "technologies": ["Python", "FastAPI", "WebSockets", "React", "PostgreSQL", "Docker", "Chart.js"]
     },
     {
       "name": "Microservices Migration",
-      "description": "Led migration of monolithic app to microservices architecture using Docker and Kubernetes",
-      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL"]
+      "description": "Led migration of monolithic application to microservices architecture using Docker and Kubernetes, reducing deployment time by 60% and improving system reliability.",
+      "technologies": ["Python", "Docker", "Kubernetes", "RabbitMQ", "PostgreSQL", "gRPC"]
     }
   ],
   "education": {
-    "degree": "B.S. Computer Science",
-    "institution": "State University",
+    "degree": "B.E. Computer Science",
+    "institution": "Visvesvaraya Technological University",
     "graduation_year": 2020
   },
   "certifications": [

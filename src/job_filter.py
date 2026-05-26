@@ -2,10 +2,11 @@
 Job filter & scorer: ranks job postings by relevance to the resume profile.
 
 Scoring breakdown (configurable weights in config.yaml):
-  - Title match  (30 pts): does the job title match desired titles?
-  - Skills match (40 pts): how many resume skills appear in the posting?
-  - Location     (15 pts): does location match or is it remote?
-  - Experience   (15 pts): does level language match profile's experience level?
+  - Title match    (25 pts): does the job title match desired titles?
+  - Skills match   (30 pts): how many resume skills appear in the posting?
+  - Projects match (15 pts): do project technologies/domains appear in the posting?
+  - Location       (15 pts): does location match or is it remote?
+  - Experience     (15 pts): does level language match profile's experience level?
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .job_searcher import JobPosting
-from .resume_parser import ResumeProfile
+from .resume_parser import ResumeProfile, _normalise_job_type
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +34,11 @@ def _score_title(job_title: str, profile: ResumeProfile, weight: int) -> int:
     best = 0
     for desired in profile.target_titles:
         d = desired.lower()
-        # Exact match
         if d == jt:
             best = max(best, weight)
-        # Desired title is a substring of the job title or vice-versa
         elif d in jt or jt in d:
             best = max(best, int(weight * 0.8))
         else:
-            # Word-level overlap
             d_words = set(d.split())
             j_words = set(jt.split())
             overlap = d_words & j_words
@@ -54,19 +52,17 @@ def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
     """Points for skill/keyword mentions in the full job text."""
     text_lower = text.lower()
     matched = 0
-    for skill in profile.all_keywords:
-        # Use word-boundary matching for short skills to avoid false positives
+    for skill in profile.skills_lower:
         if len(skill) <= 3:
             if re.search(rf"\b{re.escape(skill)}\b", text_lower):
                 matched += 1
         elif skill in text_lower:
             matched += 1
 
-    if not profile.all_keywords:
+    if not profile.skills_lower:
         return 0
 
-    ratio = min(matched / len(profile.all_keywords), 1.0)
-    # Bonus for primary skills
+    ratio = min(matched / len(profile.skills_lower), 1.0)
     primary_matched = sum(
         1 for s in profile.primary_skills if s.lower() in text_lower
     )
@@ -75,11 +71,48 @@ def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
     return int(weight * combined)
 
 
+def _score_projects(text: str, profile: ResumeProfile, weight: int) -> int:
+    """Points for project-technology and project-domain overlap in the job text.
+
+    Rewards jobs that match the kinds of work the candidate has actually built:
+    - Direct technology match (e.g. FastAPI, PostgreSQL, Docker from projects)
+    - Domain keyword match (e.g. 'analytics', 'ecommerce', 'microservices')
+    """
+    if not profile.project_tech_lower and not profile.project_domain_keywords:
+        return int(weight * 0.5)
+
+    text_lower = text.lower()
+
+    # Technology match
+    tech_matched = 0
+    for tech in profile.project_tech_lower:
+        if len(tech) <= 3:
+            if re.search(rf"\b{re.escape(tech)}\b", text_lower):
+                tech_matched += 1
+        elif tech in text_lower:
+            tech_matched += 1
+
+    tech_total = max(len(profile.project_tech_lower), 1)
+    tech_ratio = min(tech_matched / tech_total, 1.0)
+
+    # Domain keyword match (words extracted from project descriptions)
+    domain_matched = 0
+    for kw in profile.project_domain_keywords:
+        if kw in text_lower:
+            domain_matched += 1
+    domain_total = max(len(profile.project_domain_keywords), 1)
+    domain_ratio = min(domain_matched / domain_total, 1.0)
+
+    # Tech match weighs more than domain word match
+    combined = tech_ratio * 0.75 + domain_ratio * 0.25
+    return int(weight * combined)
+
+
 def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int:
     """Points for location match or remote compatibility."""
     loc_lower = job.location.lower()
 
-    if job.remote or "remote" in loc_lower or "worldwide" in loc_lower:
+    if job.remote or "remote" in loc_lower or "worldwide" in loc_lower or "wfh" in loc_lower:
         if profile.remote_ok:
             return weight
         return int(weight * 0.5)
@@ -91,7 +124,6 @@ def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int
     if profile.willing_to_relocate:
         return int(weight * 0.4)
 
-    # No match at all
     return 0
 
 
@@ -103,7 +135,6 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
     level = profile.experience_level
     level_keywords: list[str] = scoring_cfg.get(level, {}).get("keywords", [])
 
-    # If no level keywords defined, give full score (don't penalise)
     if not level_keywords:
         return weight
 
@@ -111,22 +142,31 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
         if kw in text_lower:
             return weight
 
-    # Mild partial credit for adjacent levels
     adjacent = {"junior": "mid", "mid": "senior", "senior": "mid"}.get(level, "")
     adjacent_kws: list[str] = scoring_cfg.get(adjacent, {}).get("keywords", [])
     for kw in adjacent_kws:
         if kw in text_lower:
             return int(weight * 0.5)
 
-    # If no level language found at all → neutral (don't heavily penalise)
     return int(weight * 0.6)
+
+
+def _score_preferred_terms(text: str, profile: ResumeProfile) -> int:
+    """Bonus points (0–5) when job text contains profile's preferred search terms."""
+    if not profile.preferred_terms:
+        return 0
+    text_lower = text.lower()
+    matched = sum(1 for t in profile.preferred_terms if t in text_lower)
+    ratio = min(matched / len(profile.preferred_terms), 1.0)
+    return int(5 * ratio)
 
 
 def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
     """Compute and return a 0-100 relevance score for a job posting."""
     scoring = config.get("scoring", {})
-    title_w = scoring.get("title_match_weight", 30)
-    skills_w = scoring.get("skills_match_weight", 40)
+    title_w = scoring.get("title_match_weight", 25)
+    skills_w = scoring.get("skills_match_weight", 30)
+    projects_w = scoring.get("projects_match_weight", 15)
     loc_w = scoring.get("location_match_weight", 15)
     exp_w = scoring.get("experience_match_weight", 15)
 
@@ -135,15 +175,107 @@ def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
     score = (
         _score_title(job.title, profile, title_w)
         + _score_skills(full_text, profile, skills_w)
+        + _score_projects(full_text, profile, projects_w)
         + _score_location(job, profile, loc_w)
         + _score_experience(full_text, profile, exp_w, config)
+        + _score_preferred_terms(full_text, profile)
     )
     return min(score, 100)
+
+
+def get_matched_keywords(job: JobPosting, profile: ResumeProfile) -> list[str]:
+    """Return a list of skills/techs from the resume that appear in the job text.
+
+    Used to populate the 'Matched Skills' line in the email digest.
+    """
+    text_lower = (
+        f"{job.title} {job.description} {' '.join(job.tags)}"
+    ).lower()
+
+    matched: list[str] = []
+    # Primary skills first (highest signal)
+    for skill in profile.primary_skills:
+        sl = skill.lower()
+        found = (
+            bool(re.search(rf"\b{re.escape(sl)}\b", text_lower))
+            if len(sl) <= 3
+            else sl in text_lower
+        )
+        if found and skill not in matched:
+            matched.append(skill)
+
+    # Then project technologies
+    for tech in profile.project_technologies:
+        tl = tech.lower()
+        found = (
+            bool(re.search(rf"\b{re.escape(tl)}\b", text_lower))
+            if len(tl) <= 3
+            else tl in text_lower
+        )
+        if found and tech not in matched:
+            matched.append(tech)
+
+    # Then remaining skills
+    for skill in profile.all_skills:
+        sl = skill.lower()
+        found = (
+            bool(re.search(rf"\b{re.escape(sl)}\b", text_lower))
+            if len(sl) <= 3
+            else sl in text_lower
+        )
+        if found and skill not in matched:
+            matched.append(skill)
+
+    return matched[:10]
 
 
 # ---------------------------------------------------------------------------
 # Hard filters
 # ---------------------------------------------------------------------------
+
+# Keywords that indicate each canonical job type, checked against job text
+_JOB_TYPE_SIGNALS: dict[str, list[str]] = {
+    "full-time": ["full-time", "full time", "permanent", "regular"],
+    "contract":  ["contract", "freelance", "c2h", "contract-to-hire", "consultant"],
+    "part-time": ["part-time", "part time"],
+    "internship": ["intern", "internship", "trainee"],
+    "remote":    ["remote", "work from home", "wfh", "fully remote", "100% remote"],
+}
+
+
+def _job_matches_type(job: JobPosting, profile: ResumeProfile, config: dict) -> bool:
+    """Return True if the job's type matches any of the profile's preferred job types.
+
+    Checks both the structured ``job_type`` field and free-text signals in the
+    title + description, so that scrapers that always return 'full-time' are
+    not incorrectly excluded.
+    """
+    filter_cfg = config.get("filters", {})
+    if not filter_cfg.get("filter_by_job_type", False):
+        return True  # feature disabled
+
+    preferred = profile.preferred_job_types
+    if not preferred:
+        return True  # nothing specified → allow all
+
+    # Normalise the job's structured type
+    job_type_norm = _normalise_job_type(job.job_type)
+    if job_type_norm in preferred:
+        return True
+
+    # Text-signal fallback
+    text_lower = f"{job.title} {job.description} {job.location}".lower()
+    for pref in preferred:
+        signals = _JOB_TYPE_SIGNALS.get(pref, [pref])
+        if any(sig in text_lower for sig in signals):
+            return True
+
+    logger.debug(
+        "Excluded %r – job type %r not in preferred %s",
+        job.title, job.job_type, preferred,
+    )
+    return False
+
 
 def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) -> bool:
     """Return False if job should be excluded regardless of score."""
@@ -180,6 +312,10 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
             matched_loc = any(lo.lower() in loc_lower for lo in location_overrides)
             if not matched_loc:
                 return False
+
+    # Job type filter (full-time / contract / part-time / internship)
+    if not _job_matches_type(job, profile, config):
+        return False
 
     return True
 
@@ -307,6 +443,9 @@ def filter_and_rank_jobs(
                 "Filtered out %r (score %d < %d)", job.title, job.relevance_score, min_score
             )
             continue
+
+        # Attach matched keywords for use in the email digest
+        job.matched_keywords = get_matched_keywords(job, profile)
 
         filtered.append(job)
         new_seen_ids.add(job.id)

@@ -2,6 +2,8 @@
 # auto-job-bot – India Job Alert System Configuration
 # ============================================================
 # Edit this file to customise your daily job search.
+# All filter dimensions are derived from resume.json by default;
+# use the overrides below to fine-tune without editing the resume.
 
 email:
   # Must match EMAIL_SENDER environment variable
@@ -38,15 +40,27 @@ search:
     company_careers: true     # Scrape career pages of top Indian tech companies
 
 filters:
-  # Override resume.json location here (optional)
-  # Leave empty to use city/state from resume.json
-  locations: []              # e.g. ["Bengaluru", "Mumbai", "Remote"]
+  # ── Location ────────────────────────────────────────────
+  # Override resume.json location here (optional).
+  # Leave empty to use city/state/preferred_locations from resume.json.
+  # Example: ["Bengaluru", "Mumbai", "Hyderabad", "Remote"]
+  locations: []
   remote_only: false         # true = only show remote/WFH jobs
 
-  # Override desired job titles from resume.json (optional)
+  # ── Job Titles ───────────────────────────────────────────
+  # Override desired job titles from resume.json (optional).
   # Leave empty to auto-build from resume.json → target.job_titles
   job_titles: []
 
+  # ── Job Type Filter ──────────────────────────────────────
+  # When true, only jobs matching the preferred job_types in resume.json
+  # (full-time, contract, part-time, internship, remote) will be included.
+  # The filter checks both the structured job_type field AND free-text
+  # signals in the description so that scrapers with limited type data
+  # are not over-penalised. Set to false to include all job types.
+  filter_by_job_type: false
+
+  # ── Keyword Filters ──────────────────────────────────────
   # Every job MUST contain at least one of these keywords (optional)
   required_keywords: []      # e.g. ["Python"] to only show Python jobs
 
@@ -62,7 +76,9 @@ filters:
     - "unpaid"
     - "commission only"
 
-  # Experience level keyword mapping used for scoring
+  # ── Experience Level Mapping ─────────────────────────────
+  # Keywords used to detect the seniority of a job posting.
+  # Matched against the job's title + description for scoring.
   experience_levels:
     junior:
       keywords:
@@ -98,11 +114,24 @@ filters:
         - "experienced"
 
 scoring:
-  # Relevance scoring weights (must sum to 100)
-  title_match_weight: 30      # Does job title match desired titles?
-  skills_match_weight: 40     # How many resume skills appear in job description?
-  location_match_weight: 15   # Does location match or is it remote?
-  experience_match_weight: 15 # Does experience language match profile level?
+  # ── Relevance Scoring Weights ────────────────────────────
+  # Each weight controls how much that dimension contributes to the
+  # 0–100 relevance score.  Weights should sum to 100.
+  #
+  #  title_match_weight    – job title vs. resume.json → target.job_titles
+  #  skills_match_weight   – resume skills in job description/tags
+  #  projects_match_weight – project technologies & domain keywords in job text
+  #  location_match_weight – city / preferred_locations / remote match
+  #  experience_match_weight – experience-level language vs. profile level
+  #
+  # A small bonus (up to +5) is added when preferred_terms from
+  # resume.json → target.preferred_terms appear in the job text.
+
+  title_match_weight: 25
+  skills_match_weight: 30
+  projects_match_weight: 15
+  location_match_weight: 15
+  experience_match_weight: 15
 
 deduplication:
   # Skip jobs already seen in previous runs
