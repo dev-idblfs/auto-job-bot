@@ -5,10 +5,71 @@ used for job matching and scoring.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Multi-word domain phrases to look for in project descriptions.
+# Order matters – longer phrases first to avoid false sub-matches.
+_DOMAIN_PHRASE_PATTERNS: list[str] = [
+    r"real[\-\s]time analytics",
+    r"real[\-\s]time dashboard",
+    r"real[\-\s]time (data|stream|processing)",
+    r"machine learning",
+    r"deep learning",
+    r"natural language processing",
+    r"computer vision",
+    r"data pipeline",
+    r"data engineering",
+    r"data warehouse",
+    r"data lake",
+    r"streaming (data|pipeline|architecture)",
+    r"event[\-\s]driven architecture",
+    r"microservices? architecture",
+    r"micro[\-\s]service",
+    r"service[\-\s]oriented architecture",
+    r"distributed systems?",
+    r"cloud[\-\s]native",
+    r"serverless",
+    r"e[\-\s]commerce platform",
+    r"payment (gateway|integration|processing)",
+    r"recommendation (engine|system)",
+    r"search (engine|platform|infrastructure)",
+    r"api gateway",
+    r"graphql (api|backend|service)",
+    r"rest(ful)? api",
+    r"websocket",
+    r"message (queue|broker|bus)",
+    r"ci[/\-\s]cd (pipeline|workflow)",
+    r"infrastructure as code",
+    r"devops (pipeline|workflow|automation)",
+    r"container orchestration",
+    r"load balancing",
+    r"high availability",
+    r"fault tolerance",
+    r"auto[\-\s]scaling",
+    r"multi[\-\s]tenant",
+    r"saas platform",
+    r"full[\-\s]stack (web|application|development)",
+    r"mobile (app|application|backend)",
+    r"ios (app|development)",
+    r"android (app|development)",
+    r"cross[\-\s]platform",
+]
+
+_COMPILED_PHRASES = [re.compile(p, re.IGNORECASE) for p in _DOMAIN_PHRASE_PATTERNS]
+
+
+def _extract_domain_phrases(text: str) -> list[str]:
+    """Return unique multi-word domain phrases found in `text`."""
+    found: list[str] = []
+    for rx in _COMPILED_PHRASES:
+        m = rx.search(text)
+        if m:
+            found.append(m.group(0).lower())
+    return list(dict.fromkeys(found))  # preserve order, deduplicate
 
 
 class ResumeProfile:
@@ -37,14 +98,19 @@ class ResumeProfile:
 
         # Target job preferences
         self.target_titles: list[str] = target.get("job_titles", [])
-        self.job_types: list[str] = target.get("job_types", ["full-time"])
+        self.job_types: list[str] = [jt.lower() for jt in target.get("job_types", ["full-time"])]
         self.experience_level: str = target.get("experience_level", "mid")
         self.min_salary: int = target.get("min_salary", 0)
-        self.target_industries: list[str] = target.get("industries", [])
+        self.target_industries: list[str] = [i.lower() for i in target.get("industries", [])]
 
         # Experience
         self.years_experience: int = experience.get("years_total", 0)
         self.current_title: str = experience.get("current_title", "")
+
+        # Build experience description corpus for phrase extraction
+        exp_corpus = " ".join(
+            h.get("description", "") for h in experience.get("history", [])
+        )
 
         # Skills – flatten to a single set of lowercase strings
         all_skills: list[str] = []
@@ -54,17 +120,22 @@ class ResumeProfile:
         self.skills_lower: set[str] = {s.lower() for s in all_skills}
         self.primary_skills: list[str] = skills_data.get("primary", [])
 
-        # Project keywords
+        # Projects – technologies + domain phrases from descriptions
         project_techs: list[str] = []
-        project_words: list[str] = []
+        project_desc_corpus = ""
+        self.projects: list[dict] = projects
         for proj in projects:
             project_techs.extend(proj.get("technologies", []))
-            desc = proj.get("description", "")
-            project_words.extend(desc.lower().split())
-        self.project_technologies: list[str] = list(set(project_techs))
+            project_desc_corpus += " " + proj.get("name", "") + " " + proj.get("description", "")
+
+        self.project_technologies: list[str] = list(dict.fromkeys(project_techs))
         self.project_tech_lower: set[str] = {t.lower() for t in self.project_technologies}
 
-        # Combined keyword pool for matching
+        # Domain phrases extracted from both project descriptions and experience history
+        full_corpus = project_desc_corpus + " " + exp_corpus
+        self.project_domain_phrases: list[str] = _extract_domain_phrases(full_corpus)
+
+        # Combined keyword pool for skill matching
         self.all_keywords: set[str] = self.skills_lower | self.project_tech_lower
 
         # Location strings for matching
@@ -92,7 +163,8 @@ class ResumeProfile:
         return (
             f"<ResumeProfile name={self.name!r} "
             f"level={self.experience_level} "
-            f"location={self.location_display!r}>"
+            f"location={self.location_display!r} "
+            f"domain_phrases={self.project_domain_phrases}>"
         )
 
 
@@ -107,5 +179,11 @@ def load_resume(path: str | Path = "resume.json") -> ResumeProfile:
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     profile = ResumeProfile(data)
-    logger.info("Loaded resume for: %s (%s)", profile.name, profile.location_display)
+    logger.info(
+        "Loaded resume for: %s (%s) | job_types=%s | domain_phrases=%s",
+        profile.name,
+        profile.location_display,
+        profile.job_types,
+        profile.project_domain_phrases,
+    )
     return profile
