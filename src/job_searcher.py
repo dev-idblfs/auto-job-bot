@@ -41,6 +41,10 @@ class JobPosting:
     source: str
     tags: list[str] = field(default_factory=list)
     relevance_score: int = 0
+    # Profile-match metadata (populated during filtering)
+    matched_skills: list[str] = field(default_factory=list)
+    matched_projects: list[str] = field(default_factory=list)
+    match_reasons: list[str] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -78,9 +82,7 @@ def fetch_all_jobs(profile: Any, config: dict) -> list[JobPosting]:
     sources_cfg = search_cfg.get("sources", {})
 
     # Build search queries from resume profile + config overrides
-    filter_cfg = config.get("filters", {})
-    title_overrides: list[str] = filter_cfg.get("job_titles", [])
-    queries: list[str] = title_overrides if title_overrides else profile.get_search_queries()
+    queries: list[str] = profile.get_search_queries(config)
 
     # Map source name → (scraper_class, enabled_key)
     scraper_registry = [

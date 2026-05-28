@@ -65,6 +65,44 @@ def _score_badge(score: int) -> str:
     )
 
 
+def _skill_chips_html(skills: list[str], color: str = "#1a1a2e") -> str:
+    """Render a row of small skill/tech chips."""
+    if not skills:
+        return ""
+    chips = "".join(
+        f'<span style="display:inline-block;background:{color}18;color:{color};'
+        f"font-size:11px;padding:2px 8px;border-radius:10px;margin:2px 3px 2px 0;"
+        f'font-weight:600;border:1px solid {color}33;">{s}</span>'
+        for s in skills
+    )
+    return f'<div style="margin-top:8px;line-height:1.8;">{chips}</div>'
+
+
+def _match_summary_html(job: JobPosting) -> str:
+    """Build the profile-match highlight block for a job card."""
+    parts: list[str] = []
+
+    if job.matched_skills:
+        top_skills = job.matched_skills[:8]
+        chips = _skill_chips_html(top_skills, "#1565c0")
+        parts.append(
+            f'<div style="margin-top:10px;">'
+            f'<span style="font-size:11px;color:#666;font-weight:600;">✅ Matched skills:</span>'
+            f'{chips}</div>'
+        )
+
+    if job.matched_projects:
+        top_proj = job.matched_projects[:5]
+        chips = _skill_chips_html(top_proj, "#2e7d32")
+        parts.append(
+            f'<div style="margin-top:6px;">'
+            f'<span style="font-size:11px;color:#666;font-weight:600;">🛠 Project tech:</span>'
+            f'{chips}</div>'
+        )
+
+    return "\n".join(parts)
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -79,12 +117,13 @@ def _job_card_html(job: JobPosting) -> str:
     )
     source_color = _source_color(job.source)
     posted = job.posted_at[:10] if job.posted_at and len(job.posted_at) >= 10 else job.posted_at
+    match_html = _match_summary_html(job)
 
     return f"""
 <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
             padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.07);">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
-    <div>
+    <div style="flex:1;min-width:0;padding-right:12px;">
       <div style="font-size:17px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">
         {job.title}{remote_badge}
       </div>
@@ -94,7 +133,7 @@ def _job_card_html(job: JobPosting) -> str:
       </div>
       {salary_line}
     </div>
-    <div style="text-align:right;min-width:140px;">
+    <div style="text-align:right;min-width:140px;flex-shrink:0;">
       <span style="background:{source_color};color:#fff;font-size:11px;
                    padding:2px 9px;border-radius:10px;font-weight:600;">
         {job.source}
@@ -104,10 +143,12 @@ def _job_card_html(job: JobPosting) -> str:
     </div>
   </div>
   {"<p style='font-size:13px;color:#555;margin:12px 0 4px;line-height:1.6;'>" + job.short_description + "</p>" if job.short_description else ""}
-  <div style="margin-top:12px;">
+  {match_html}
+  <div style="margin-top:14px;">
     <a href="{job.apply_url}"
        style="background:#1a1a2e;color:#fff;text-decoration:none;
-              padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;">
+              padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;
+              display:inline-block;">
       Apply Now →
     </a>
   </div>
@@ -165,10 +206,22 @@ def build_html_email(
   <!-- Profile summary strip -->
   <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
               padding:14px 20px;margin-bottom:24px;font-size:13px;color:#555;">
-    <strong>Your Profile:</strong>
-    &nbsp;📍 {profile.location_display or "India"}
-    &nbsp;·&nbsp; 💼 {profile.experience_level.title()} · {profile.years_experience} yrs
-    &nbsp;·&nbsp; 🔑 {", ".join(profile.primary_skills[:5])}
+    <div style="font-weight:700;color:#1a1a2e;margin-bottom:8px;">Your Profile Match Criteria</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 0;">
+      <div style="width:50%;min-width:200px;padding:2px 0;">
+        📍 <strong>Location:</strong> {profile.location_display or "India"}
+        {"&nbsp;· Remote OK" if profile.remote_ok else ""}
+      </div>
+      <div style="width:50%;min-width:200px;padding:2px 0;">
+        💼 <strong>Experience:</strong> {profile.experience_level.title()} ({profile.years_experience} yrs)
+      </div>
+      <div style="width:50%;min-width:200px;padding:2px 0;">
+        🎯 <strong>Job types:</strong> {", ".join(profile.job_types) if profile.job_types else "Any"}
+      </div>
+      <div style="width:100%;padding:4px 0 0;">
+        🔑 <strong>Key skills:</strong> {", ".join(profile.primary_skills[:8])}
+      </div>
+    </div>
   </div>
 
   <!-- Job cards -->
@@ -217,6 +270,10 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
             f"   Score    : {job.relevance_score}%",
             f"   Apply    : {job.apply_url}",
         ]
+        if job.matched_skills:
+            lines.append(f"   Skills   : {', '.join(job.matched_skills[:8])}")
+        if job.matched_projects:
+            lines.append(f"   Projects : {', '.join(job.matched_projects[:5])}")
         if job.short_description:
             lines.append(f"   Summary  : {job.short_description[:200]}")
     return "\n".join(lines)
