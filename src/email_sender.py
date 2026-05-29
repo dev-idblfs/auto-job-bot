@@ -65,6 +65,41 @@ def _score_badge(score: int) -> str:
     )
 
 
+def _pill(label: str, bg: str, fg: str = "#fff") -> str:
+    return (
+        f'<span style="display:inline-block;background:{bg};color:{fg};'
+        f"font-size:11px;padding:2px 8px;border-radius:10px;"
+        f'font-weight:600;margin:2px 2px 2px 0;">{label}</span>'
+    )
+
+
+def _matched_pills_html(job: JobPosting) -> str:
+    """Build a row of matched-skill and matched-project pills for the card."""
+    parts: list[str] = []
+
+    skill_pills = "".join(
+        _pill(s.title(), "#1565c0") for s in (job.matched_skills or [])[:8]
+    )
+    if skill_pills:
+        parts.append(
+            f'<div style="margin-top:8px;">'
+            f'<span style="font-size:11px;color:#888;margin-right:4px;">Skills:</span>'
+            f'{skill_pills}</div>'
+        )
+
+    project_pills = "".join(
+        _pill(p.title(), "#6a1b9a") for p in (job.matched_projects or [])[:5]
+    )
+    if project_pills:
+        parts.append(
+            f'<div style="margin-top:4px;">'
+            f'<span style="font-size:11px;color:#888;margin-right:4px;">Projects:</span>'
+            f'{project_pills}</div>'
+        )
+
+    return "".join(parts)
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -79,6 +114,7 @@ def _job_card_html(job: JobPosting) -> str:
     )
     source_color = _source_color(job.source)
     posted = job.posted_at[:10] if job.posted_at and len(job.posted_at) >= 10 else job.posted_at
+    matched_pills = _matched_pills_html(job)
 
     return f"""
 <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
@@ -104,6 +140,7 @@ def _job_card_html(job: JobPosting) -> str:
     </div>
   </div>
   {"<p style='font-size:13px;color:#555;margin:12px 0 4px;line-height:1.6;'>" + job.short_description + "</p>" if job.short_description else ""}
+  {matched_pills}
   <div style="margin-top:12px;">
     <a href="{job.apply_url}"
        style="background:#1a1a2e;color:#fff;text-decoration:none;
@@ -169,6 +206,7 @@ def build_html_email(
     &nbsp;📍 {profile.location_display or "India"}
     &nbsp;·&nbsp; 💼 {profile.experience_level.title()} · {profile.years_experience} yrs
     &nbsp;·&nbsp; 🔑 {", ".join(profile.primary_skills[:5])}
+    {("&nbsp;·&nbsp; 🚀 " + ", ".join(profile.project_phrases[:3])) if getattr(profile, "project_phrases", []) else ""}
   </div>
 
   <!-- Job cards -->
@@ -178,7 +216,8 @@ def build_html_email(
   <div style="text-align:center;color:#aaa;font-size:12px;margin-top:32px;padding-top:16px;
               border-top:1px solid #e8e8e8;">
     <p>
-      Powered by <strong>auto-job-bot</strong> · India Job Alert System<br>
+      Powered by <strong>auto-job-bot</strong> · Profile-Based Job Alert System<br>
+      Filtered by your location, experience level, skills &amp; project domains<br>
       Scraped from LinkedIn, Naukri, Indeed India, Foundit, Hirist, Cutshort &amp; Company Career Pages<br>
       To update your preferences, edit <code>resume.json</code> and <code>config.yaml</code>
     </p>
@@ -219,6 +258,10 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
         ]
         if job.short_description:
             lines.append(f"   Summary  : {job.short_description[:200]}")
+        if job.matched_skills:
+            lines.append(f"   Skills   : {', '.join(job.matched_skills[:8])}")
+        if job.matched_projects:
+            lines.append(f"   Projects : {', '.join(job.matched_projects[:5])}")
     return "\n".join(lines)
 
 

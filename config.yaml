@@ -1,7 +1,9 @@
 # ============================================================
-# auto-job-bot – India Job Alert System Configuration
+# auto-job-bot – Profile-Based Job Alert Configuration
 # ============================================================
 # Edit this file to customise your daily job search.
+# Profile data (skills, location, projects, job types) is read
+# from resume.json – the filters here layer on top of that.
 
 email:
   # Must match EMAIL_SENDER environment variable
@@ -62,6 +64,10 @@ filters:
     - "unpaid"
     - "commission only"
 
+  # Whether to enforce job-type filtering based on resume.json → target.job_types
+  # Disable to see all job types regardless of preference
+  enforce_job_type_filter: true
+
   # Experience level keyword mapping used for scoring
   experience_levels:
     junior:
@@ -98,11 +104,14 @@ filters:
         - "experienced"
 
 scoring:
-  # Relevance scoring weights (must sum to 100)
+  # Relevance scoring weights (title + skills + projects + location + experience = 100)
   title_match_weight: 30      # Does job title match desired titles?
-  skills_match_weight: 40     # How many resume skills appear in job description?
+  skills_match_weight: 30     # How many resume skills appear in job description?
+  projects_match_weight: 10   # Do project domain phrases / technologies appear?
   location_match_weight: 15   # Does location match or is it remote?
   experience_match_weight: 15 # Does experience language match profile level?
+  # Extra bonus points on top for matching target industries (capped at 100 total)
+  industry_bonus_max: 5       # Max bonus for matching industries from resume.json
 
 deduplication:
   # Skip jobs already seen in previous runs
