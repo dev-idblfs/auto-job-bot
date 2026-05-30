@@ -1,11 +1,13 @@
 """
 Job filter & scorer: ranks job postings by relevance to the resume profile.
 
-Scoring breakdown (configurable weights in config.yaml):
-  - Title match  (30 pts): does the job title match desired titles?
-  - Skills match (40 pts): how many resume skills appear in the posting?
-  - Location     (15 pts): does location match or is it remote?
-  - Experience   (15 pts): does level language match profile's experience level?
+Scoring breakdown (weights configurable in config.yaml; must sum to 100):
+  - Title match    (30 pts): job title vs. candidate's desired titles
+  - Skills match   (30 pts): resume skills found in the job posting text
+  - Projects match (10 pts): project technologies / domain phrases in posting
+  - Location       (15 pts): location match or remote compatibility
+  - Experience     (15 pts): experience-level language matches profile level
+  - Industry bonus (0-5 pts): bonus for preferred industries (capped at 100 total)
 """
 
 from __future__ import annotations
@@ -24,55 +26,101 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Scoring
+# Industry keyword map for bonus scoring
 # ---------------------------------------------------------------------------
 
-def _score_title(job_title: str, profile: ResumeProfile, weight: int) -> int:
-    """Points for title similarity to desired titles."""
+INDUSTRY_KEYWORDS: dict[str, list[str]] = {
+    "fintech":     ["fintech", "financial technology", "payments", "banking", "insurtech", "wealthtech"],
+    "saas":        ["saas", "software as a service", "b2b software", "cloud software"],
+    "ai/ml":       ["artificial intelligence", "machine learning", "deep learning", "nlp", "computer vision", "llm", "generative ai"],
+    "startup":     ["startup", "early stage", "series a", "series b", "pre-ipo", "funded startup"],
+    "ecommerce":   ["e-commerce", "ecommerce", "online marketplace", "retail tech"],
+    "healthtech":  ["healthtech", "health technology", "medtech", "digital health"],
+    "edtech":      ["edtech", "education technology", "e-learning"],
+    "logistics":   ["logistics", "supply chain", "delivery tech"],
+}
+
+
+# ---------------------------------------------------------------------------
+# Scoring helpers
+# ---------------------------------------------------------------------------
+
+def _score_title(job_title: str, profile: ResumeProfile, weight: int) -> tuple[int, list[str]]:
+    """Points for title similarity to desired titles. Also returns matched titles."""
     jt = job_title.lower()
     best = 0
+    matched: list[str] = []
     for desired in profile.target_titles:
         d = desired.lower()
-        # Exact match
         if d == jt:
-            best = max(best, weight)
-        # Desired title is a substring of the job title or vice-versa
+            score = weight
         elif d in jt or jt in d:
-            best = max(best, int(weight * 0.8))
+            score = int(weight * 0.8)
         else:
-            # Word-level overlap
             d_words = set(d.split())
             j_words = set(jt.split())
             overlap = d_words & j_words
-            if overlap:
-                ratio = len(overlap) / max(len(d_words), len(j_words))
-                best = max(best, int(weight * ratio * 0.7))
-    return best
+            score = int(weight * len(overlap) / max(len(d_words), len(j_words)) * 0.7) if overlap else 0
+
+        if score > 0 and desired not in matched:
+            matched.append(desired)
+        best = max(best, score)
+    return best, matched
 
 
-def _score_skills(text: str, profile: ResumeProfile, weight: int) -> int:
-    """Points for skill/keyword mentions in the full job text."""
+def _score_skills(text: str, profile: ResumeProfile, weight: int) -> tuple[int, list[str]]:
+    """Points for skill mentions in the full job text. Returns (score, matched_skills)."""
     text_lower = text.lower()
-    matched = 0
+    matched: list[str] = []
+
     for skill in profile.all_keywords:
-        # Use word-boundary matching for short skills to avoid false positives
         if len(skill) <= 3:
             if re.search(rf"\b{re.escape(skill)}\b", text_lower):
-                matched += 1
+                matched.append(skill)
         elif skill in text_lower:
-            matched += 1
+            matched.append(skill)
 
     if not profile.all_keywords:
-        return 0
+        return 0, []
 
-    ratio = min(matched / len(profile.all_keywords), 1.0)
-    # Bonus for primary skills
-    primary_matched = sum(
-        1 for s in profile.primary_skills if s.lower() in text_lower
-    )
-    primary_ratio = primary_matched / max(len(profile.primary_skills), 1)
+    ratio = min(len(matched) / len(profile.all_keywords), 1.0)
+    primary_matched = [s for s in profile.primary_skills if s.lower() in text_lower]
+    primary_ratio = len(primary_matched) / max(len(profile.primary_skills), 1)
     combined = ratio * 0.6 + primary_ratio * 0.4
-    return int(weight * combined)
+
+    # Use display-friendly skill names (original case from primary_skills)
+    display_skills: list[str] = []
+    for s in profile.all_skills:
+        if s.lower() in matched:
+            display_skills.append(s)
+
+    return int(weight * combined), display_skills[:10]
+
+
+def _score_projects(text: str, profile: ResumeProfile, weight: int) -> tuple[int, list[str]]:
+    """
+    Points for project domain phrases and project technologies appearing in
+    the job description. Returns (score, matched_project_terms).
+    """
+    text_lower = text.lower()
+    matched: list[str] = []
+
+    # Check project technologies
+    for tech in profile.project_technologies:
+        if tech.lower() in text_lower:
+            matched.append(tech)
+
+    # Check multi-word domain phrases extracted from project descriptions
+    for phrase in profile.project_phrases:
+        if phrase in text_lower:
+            matched.append(phrase)
+
+    if not (profile.project_technologies or profile.project_phrases):
+        return 0, []
+
+    total = len(profile.project_technologies) + len(profile.project_phrases)
+    ratio = min(len(matched) / total, 1.0) if total else 0.0
+    return int(weight * ratio), list(dict.fromkeys(matched))[:8]
 
 
 def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int:
@@ -80,9 +128,7 @@ def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int
     loc_lower = job.location.lower()
 
     if job.remote or "remote" in loc_lower or "worldwide" in loc_lower:
-        if profile.remote_ok:
-            return weight
-        return int(weight * 0.5)
+        return weight if profile.remote_ok else int(weight * 0.5)
 
     for term in profile.location_terms:
         if term in loc_lower:
@@ -91,7 +137,6 @@ def _score_location(job: JobPosting, profile: ResumeProfile, weight: int) -> int
     if profile.willing_to_relocate:
         return int(weight * 0.4)
 
-    # No match at all
     return 0
 
 
@@ -103,7 +148,6 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
     level = profile.experience_level
     level_keywords: list[str] = scoring_cfg.get(level, {}).get("keywords", [])
 
-    # If no level keywords defined, give full score (don't penalise)
     if not level_keywords:
         return weight
 
@@ -111,34 +155,55 @@ def _score_experience(text: str, profile: ResumeProfile, weight: int, config: di
         if kw in text_lower:
             return weight
 
-    # Mild partial credit for adjacent levels
     adjacent = {"junior": "mid", "mid": "senior", "senior": "mid"}.get(level, "")
     adjacent_kws: list[str] = scoring_cfg.get(adjacent, {}).get("keywords", [])
     for kw in adjacent_kws:
         if kw in text_lower:
             return int(weight * 0.5)
 
-    # If no level language found at all → neutral (don't heavily penalise)
     return int(weight * 0.6)
 
 
+def _score_industry_bonus(text: str, profile: ResumeProfile, max_bonus: int = 5) -> int:
+    """Bonus points when the job is in one of the candidate's preferred industries."""
+    if not profile.target_industries:
+        return 0
+    text_lower = text.lower()
+    for industry in profile.target_industries:
+        kws = INDUSTRY_KEYWORDS.get(industry.lower(), [industry.lower()])
+        for kw in kws:
+            if kw in text_lower:
+                return max_bonus
+    return 0
+
+
 def score_job(job: JobPosting, profile: ResumeProfile, config: dict) -> int:
-    """Compute and return a 0-100 relevance score for a job posting."""
+    """
+    Compute and store a 0-100 relevance score for a job posting.
+    Also populates job.matched_skills, job.matched_projects, job.matched_titles.
+    """
     scoring = config.get("scoring", {})
-    title_w = scoring.get("title_match_weight", 30)
-    skills_w = scoring.get("skills_match_weight", 40)
-    loc_w = scoring.get("location_match_weight", 15)
-    exp_w = scoring.get("experience_match_weight", 15)
+    title_w    = scoring.get("title_match_weight", 30)
+    skills_w   = scoring.get("skills_match_weight", 30)
+    projects_w = scoring.get("projects_match_weight", 10)
+    loc_w      = scoring.get("location_match_weight", 15)
+    exp_w      = scoring.get("experience_match_weight", 15)
+    ind_bonus  = scoring.get("industry_bonus_max", 5)
 
     full_text = f"{job.title} {job.company} {job.description} {' '.join(job.tags)}"
 
-    score = (
-        _score_title(job.title, profile, title_w)
-        + _score_skills(full_text, profile, skills_w)
-        + _score_location(job, profile, loc_w)
-        + _score_experience(full_text, profile, exp_w, config)
-    )
-    return min(score, 100)
+    title_score, matched_titles   = _score_title(job.title, profile, title_w)
+    skills_score, matched_skills  = _score_skills(full_text, profile, skills_w)
+    proj_score, matched_projects  = _score_projects(full_text, profile, projects_w)
+    loc_score                     = _score_location(job, profile, loc_w)
+    exp_score                     = _score_experience(full_text, profile, exp_w, config)
+    bonus                         = _score_industry_bonus(full_text, profile, ind_bonus)
+
+    job.matched_titles   = matched_titles
+    job.matched_skills   = matched_skills
+    job.matched_projects = matched_projects
+
+    return min(title_score + skills_score + proj_score + loc_score + exp_score + bonus, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -162,12 +227,41 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
             logger.debug("Excluded %r – missing required keyword %r", job.title, kw)
             return False
 
+    # Job-type hard filter: only keep jobs matching the profile's desired job types
+    if profile.job_types:
+        desired_types = {jt.lower() for jt in profile.job_types}
+        job_type_lower = (job.job_type or "").lower()
+        # Normalise common variants
+        _type_map = {
+            "full-time": {"full-time", "fulltime", "full_time", "permanent"},
+            "contract": {"contract", "contractor", "fixed-term"},
+            "part-time": {"part-time", "parttime", "part_time"},
+            "internship": {"internship", "intern", "trainee"},
+            "remote": {"remote", "wfh", "work from home"},
+        }
+        matched_type = False
+        for desired in desired_types:
+            variants = _type_map.get(desired, {desired})
+            if any(v in job_type_lower for v in variants):
+                matched_type = True
+                break
+            # Also check title/description for job-type clues when API data is vague
+            if any(v in text_lower for v in variants):
+                matched_type = True
+                break
+        if not matched_type and job_type_lower not in ("", "full-time"):
+            logger.debug(
+                "Excluded %r – job_type %r not in desired types %s",
+                job.title, job.job_type, desired_types,
+            )
+            return False
+
     # Remote-only filter
     if filter_cfg.get("remote_only", False):
         if not job.remote and "remote" not in job.location.lower():
             return False
 
-    # Location filter (if explicit locations specified)
+    # Explicit location override filter
     location_overrides: list[str] = filter_cfg.get("locations", [])
     if location_overrides:
         loc_lower = job.location.lower()
@@ -177,8 +271,7 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
             or any("remote" in lo.lower() for lo in location_overrides)
         )
         if not remote_ok_here:
-            matched_loc = any(lo.lower() in loc_lower for lo in location_overrides)
-            if not matched_loc:
+            if not any(lo.lower() in loc_lower for lo in location_overrides):
                 return False
 
     return True
@@ -187,7 +280,7 @@ def _passes_hard_filters(job: JobPosting, profile: ResumeProfile, config: dict) 
 def _is_recent(job: JobPosting, days_back: int) -> bool:
     """Return True if the job was posted within the last `days_back` days."""
     if not job.posted_at:
-        return True  # Include if date unknown
+        return True
 
     for fmt in (
         "%Y-%m-%dT%H:%M:%S%z",
@@ -205,7 +298,7 @@ def _is_recent(job: JobPosting, days_back: int) -> bool:
         except ValueError:
             continue
 
-    return True  # Unparseable date → include
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -235,14 +328,12 @@ def save_seen_jobs(history_file: str, seen_ids: set[str], retention_days: int) -
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
         timestamps: dict[str, str] = existing.get("timestamps", {})
 
-        # Remove old entries
         retained = {
             jid: ts
             for jid, ts in timestamps.items()
             if _parse_ts(ts) >= cutoff
         }
 
-        # Add new
         now_str = datetime.now(tz=timezone.utc).isoformat()
         for jid in seen_ids:
             retained[jid] = retained.get(jid, now_str)
@@ -291,7 +382,6 @@ def filter_and_rank_jobs(
     filtered: list[JobPosting] = []
 
     for job in jobs:
-        # Skip previously seen jobs
         if dedup_enabled and job.id in seen_ids:
             continue
 
@@ -311,11 +401,9 @@ def filter_and_rank_jobs(
         filtered.append(job)
         new_seen_ids.add(job.id)
 
-    # Save updated seen IDs
     if dedup_enabled and new_seen_ids:
         save_seen_jobs(history_file, seen_ids | new_seen_ids, retention_days)
 
-    # Sort by relevance descending
     filtered.sort(key=lambda j: j.relevance_score, reverse=True)
 
     max_jobs = config.get("email", {}).get("max_jobs_per_email", 30)

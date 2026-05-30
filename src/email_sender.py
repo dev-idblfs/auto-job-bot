@@ -65,6 +65,19 @@ def _score_badge(score: int) -> str:
     )
 
 
+def _skill_pills(skills: list[str], color: str = "#1565c0", bg: str = "#e3f2fd") -> str:
+    """Render a row of small coloured pills for matched skills/projects."""
+    if not skills:
+        return ""
+    pills = "".join(
+        f'<span style="background:{bg};color:{color};font-size:11px;'
+        f'padding:2px 8px;border-radius:10px;font-weight:600;'
+        f'margin:2px 3px 2px 0;display:inline-block;">{s}</span>'
+        for s in skills
+    )
+    return f'<div style="margin-top:8px;line-height:1.8;">{pills}</div>'
+
+
 def _job_card_html(job: JobPosting) -> str:
     remote_badge = (
         '<span style="background:#e3f2fd;color:#1565c0;font-size:11px;'
@@ -79,6 +92,23 @@ def _job_card_html(job: JobPosting) -> str:
     )
     source_color = _source_color(job.source)
     posted = job.posted_at[:10] if job.posted_at and len(job.posted_at) >= 10 else job.posted_at
+
+    # Skills pills (blue) and project pills (purple)
+    skills_html = _skill_pills(job.matched_skills, color="#1565c0", bg="#e3f2fd") if job.matched_skills else ""
+    projects_html = _skill_pills(job.matched_projects, color="#6a1b9a", bg="#f3e5f5") if job.matched_projects else ""
+
+    match_row = ""
+    if skills_html or projects_html:
+        labels = []
+        if skills_html:
+            labels.append(
+                '<span style="font-size:11px;color:#777;font-weight:600;margin-right:4px;">Skills:</span>' + skills_html
+            )
+        if projects_html:
+            labels.append(
+                '<span style="font-size:11px;color:#777;font-weight:600;margin-right:4px;">Projects:</span>' + projects_html
+            )
+        match_row = f'<div style="margin-top:10px;">{"".join(labels)}</div>'
 
     return f"""
 <div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;
@@ -104,6 +134,7 @@ def _job_card_html(job: JobPosting) -> str:
     </div>
   </div>
   {"<p style='font-size:13px;color:#555;margin:12px 0 4px;line-height:1.6;'>" + job.short_description + "</p>" if job.short_description else ""}
+  {match_row}
   <div style="margin-top:12px;">
     <a href="{job.apply_url}"
        style="background:#1a1a2e;color:#fff;text-decoration:none;
@@ -219,6 +250,10 @@ def build_plain_text(jobs: list[JobPosting], profile: Any) -> str:
         ]
         if job.short_description:
             lines.append(f"   Summary  : {job.short_description[:200]}")
+        if job.matched_skills:
+            lines.append(f"   Skills   : {', '.join(job.matched_skills[:8])}")
+        if job.matched_projects:
+            lines.append(f"   Projects : {', '.join(job.matched_projects[:5])}")
     return "\n".join(lines)
 
 

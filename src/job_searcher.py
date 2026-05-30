@@ -41,6 +41,10 @@ class JobPosting:
     source: str
     tags: list[str] = field(default_factory=list)
     relevance_score: int = 0
+    # Populated by job_filter to show what matched in the email
+    matched_skills: list[str] = field(default_factory=list)
+    matched_projects: list[str] = field(default_factory=list)
+    matched_titles: list[str] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.id)

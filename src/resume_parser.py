@@ -5,10 +5,32 @@ used for job matching and scoring.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Multi-word technical phrases to extract from project descriptions
+_DOMAIN_PHRASE_PATTERNS = [
+    re.compile(r"\b(real[- ]time\s+\w+(?:\s+\w+)?)\b", re.I),
+    re.compile(r"\b(microservices?\s+\w+(?:\s+\w+)?)\b", re.I),
+    re.compile(r"\b(machine learning[^,\.]{0,40})\b", re.I),
+    re.compile(r"\b(deep learning[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(natural language[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(computer vision[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(data pipeline[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(event[- ]driven[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(distributed system[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(cloud[- ]native[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(serverless[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(e[- ]commerce\s+\w+(?:\s+\w+)?)\b", re.I),
+    re.compile(r"\b(data analytics[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(ci[/\s]?cd pipeline[^,\.]{0,30})\b", re.I),
+    re.compile(r"\b(rest(?:ful)?\s+api[^,\.]{0,20})\b", re.I),
+    re.compile(r"\b(graphql\s+\w+(?:\s+\w+)?)\b", re.I),
+    re.compile(r"\b(websocket[^,\.]{0,20})\b", re.I),
+]
 
 
 class ResumeProfile:
@@ -56,13 +78,22 @@ class ResumeProfile:
 
         # Project keywords
         project_techs: list[str] = []
-        project_words: list[str] = []
+        project_phrases: list[str] = []
         for proj in projects:
             project_techs.extend(proj.get("technologies", []))
             desc = proj.get("description", "")
-            project_words.extend(desc.lower().split())
+            # Extract multi-word domain phrases
+            for pattern in _DOMAIN_PHRASE_PATTERNS:
+                for match in pattern.findall(desc):
+                    phrase = match.strip().lower()
+                    if 4 < len(phrase) < 60:
+                        project_phrases.append(phrase)
         self.project_technologies: list[str] = list(set(project_techs))
         self.project_tech_lower: set[str] = {t.lower() for t in self.project_technologies}
+        self.project_phrases: list[str] = list(set(project_phrases))
+
+        # Store raw project data for scoring
+        self._projects = projects
 
         # Combined keyword pool for matching
         self.all_keywords: set[str] = self.skills_lower | self.project_tech_lower
